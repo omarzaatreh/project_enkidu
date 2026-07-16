@@ -1,0 +1,24 @@
+{
+  "name": "enkidu",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI Visibility Report — measure how often LLMs mention a brand, render a white-labelable report",
+  "scripts": {
+    "run": "tsx cli.ts run",
+    "render": "tsx cli.ts render",
+    "capture-fixtures": "tsx scripts/capture-fixtures.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "p-limit": "^7.3.0"
+  }
+}

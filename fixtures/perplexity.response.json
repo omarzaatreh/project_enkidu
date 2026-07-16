@@ -1,0 +1,37 @@
+{
+  "__note": "SYNTHETIC fixture matching the Perplexity chat completions shape (sonar). Replace with real captures via `npm run capture-fixtures` once PERPLEXITY_API_KEY is set.",
+  "id": "pplx_fixture_001",
+  "model": "sonar",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "For influencer marketing in 2026, top recommendations include The Goat Agency (full-service, global), Obviously (enterprise brands), and Ubiquitous (TikTok-first campaigns). Agencies like tikit.com also appear in boutique agency roundups for creator matchmaking."
+      }
+    }
+  ],
+  "citations": [
+    "https://influencermarketinghub.com/influencer-marketing-agencies/",
+    "https://www.byrdie.com/best-creator-agencies",
+    "https://www.reddit.com/r/marketing/comments/best_influencer_agencies"
+  ],
+  "search_results": [
+    {
+      "title": "Top Influencer Marketing Agencies (2026)",
+      "url": "https://influencermarketinghub.com/influencer-marketing-agencies/",
+      "date": "2026-06-02"
+    },
+    {
+      "title": "Best Creator Agencies",
+      "url": "https://www.byrdie.com/best-creator-agencies",
+      "date": "2026-05-14"
+    },
+    {
+      "title": "best influencer agencies?",
+      "url": "https://www.reddit.com/r/marketing/comments/best_influencer_agencies",
+      "date": "2026-04-29"
+    }
+  ]
+}

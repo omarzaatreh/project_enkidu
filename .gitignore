@@ -1,0 +1,16 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Client competitive data never enters git history (eng review OV-6)
+results/
+results.jsonl
+reports/
+
+# Node
+node_modules/
+dist/
+
+# OS
+.DS_Store

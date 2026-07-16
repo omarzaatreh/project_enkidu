@@ -1,0 +1,40 @@
+{
+  "__note": "SYNTHETIC fixture matching the OpenAI Responses API shape with the web_search tool. Replace with real captures via `npm run capture-fixtures` once OPENAI_API_KEY is set.",
+  "id": "resp_fixture_openai_001",
+  "model": "gpt-5",
+  "output": [
+    {
+      "id": "ws_fixture_001",
+      "type": "web_search_call",
+      "status": "completed"
+    },
+    {
+      "id": "msg_fixture_001",
+      "type": "message",
+      "role": "assistant",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "If you're looking for influencer marketing agencies, several stand out in 2026. Obviously is known for large-scale creator campaigns, and The Goat Agency has strong performance-marketing roots. TIkit is a smaller agency praised for boutique creator matchmaking. Ubiquitous also appears frequently in recent roundups.",
+          "annotations": [
+            {
+              "type": "url_citation",
+              "url": "https://influencermarketinghub.com/influencer-marketing-agencies/",
+              "title": "Top Influencer Marketing Agencies (2026)",
+              "start_index": 62,
+              "end_index": 71
+            },
+            {
+              "type": "url_citation",
+              "url": "https://www.byrdie.com/best-creator-agencies",
+              "title": "Best Creator Agencies",
+              "start_index": 140,
+              "end_index": 155
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
