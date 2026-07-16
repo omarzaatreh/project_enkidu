@@ -1,0 +1,26 @@
+{
+  "client": {
+    "name": "TIkit",
+    "aliases": ["TIkit", "Tikit", "TIkit Agency"],
+    "domain": "tikit.com"
+  },
+  "competitors": [],
+  "promptSet": {
+    "version": "v1",
+    "prompts": [
+      { "id": "example-recommendation", "text": "What are the best influencer marketing agencies in 2026?", "category": "recommendation" },
+      { "id": "example-comparison", "text": "Compare the top boutique influencer marketing agencies for small brands", "category": "comparison" }
+    ]
+  },
+  "models": {
+    "openai": "gpt-5",
+    "anthropic": "claude-sonnet-5",
+    "perplexity": "sonar"
+  },
+  "samplesPerPrompt": 5,
+  "whiteLabel": {
+    "agencyName": "TIkit",
+    "accentColor": "#1a56db"
+  },
+  "dateRange": { "from": "2026-07-17", "to": "2026-07-31" }
+}
