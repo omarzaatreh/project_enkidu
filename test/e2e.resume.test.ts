@@ -72,13 +72,15 @@ function resumeState(cells: Cell[]) {
   return { existingCellIds, existingOkByProvider };
 }
 
-/** Strip per-run noise (timestamps) exactly as a comparison of report numbers would. */
+/** Strip per-run noise (cell timestamps AND the aggregate's generatedAt stamp)
+ * so the comparison covers exactly the numbers a report reader sees. */
 function comparable(cells: Cell[]) {
-  return aggregate(
+  const agg = aggregate(
     cells.map((c) => ({ ...c, timestamp: "T" })),
     CONFIG,
     [],
   );
+  return { ...agg, generatedAt: "T" };
 }
 
 describe("crash-resume idempotency", () => {

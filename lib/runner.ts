@@ -44,24 +44,29 @@ export interface GenerationOutcome {
   progress: RunProgress;
 }
 
-const PROVIDERS: Provider[] = ["openai", "anthropic", "perplexity"];
+/** Enabled providers = keys of config.models (the model-selection parameter). */
+export function enabledProviders(config: RunConfig): Provider[] {
+  return (Object.keys(config.models) as Provider[]).filter(
+    (p) => config.models[p] !== undefined,
+  );
+}
 
 export async function runGeneration(args: {
   config: RunConfig;
-  adapters: Record<Provider, Adapter>;
+  adapters: Partial<Record<Provider, Adapter>>;
   /** cellIds of already-completed OK cells (failed cells are always retried). */
   existingCellIds: Set<string>;
   /** Prior ok-cell counts per provider, so a resumed run isn't misread as an outage. */
-  existingOkByProvider?: Record<Provider, number>;
+  existingOkByProvider?: Partial<Record<Provider, number>>;
   append: (cell: GenerationCell) => void;
   onProgress?: (p: RunProgress) => void;
 }): Promise<GenerationOutcome> {
   const { config, adapters, existingCellIds, append, onProgress } = args;
-  const limits: Record<Provider, ReturnType<typeof pLimit>> = {
-    openai: pLimit(PER_PROVIDER_CONCURRENCY),
-    anthropic: pLimit(PER_PROVIDER_CONCURRENCY),
-    perplexity: pLimit(PER_PROVIDER_CONCURRENCY),
-  };
+  const providers = enabledProviders(config);
+  for (const p of providers) {
+    if (!adapters[p]) throw new Error(`config enables provider "${p}" but no adapter/key was supplied`);
+  }
+  const limits = new Map(providers.map((p) => [p, pLimit(PER_PROVIDER_CONCURRENCY)]));
 
   interface Task {
     provider: Provider;
@@ -72,8 +77,8 @@ export async function runGeneration(args: {
   }
 
   const tasks: Task[] = [];
-  for (const provider of PROVIDERS) {
-    const model = config.models[provider];
+  for (const provider of providers) {
+    const model = config.models[provider]!;
     for (const prompt of config.promptSet.prompts) {
       for (let s = 0; s < config.samplesPerPrompt; s++) {
         const cellId = generationCellId({
@@ -92,16 +97,13 @@ export async function runGeneration(args: {
   const progress: RunProgress = { done: 0, total: tasks.length, failed: 0 };
   // Tally per provider over ALL planned cells this run (existing ok cells
   // count toward health so a resumed run isn't misread as an outage).
-  const okByProvider: Record<Provider, number> = { openai: 0, anthropic: 0, perplexity: 0 };
-  const plannedByProvider: Record<Provider, number> = { openai: 0, anthropic: 0, perplexity: 0 };
-  for (const p of PROVIDERS) {
-    plannedByProvider[p] = config.promptSet.prompts.length * config.samplesPerPrompt;
-  }
+  const okByProvider = new Map(providers.map((p) => [p, 0]));
+  const plannedPerProvider = config.promptSet.prompts.length * config.samplesPerPrompt;
 
   await Promise.all(
     tasks.map((t) =>
-      limits[t.provider](async () => {
-        const model = config.models[t.provider];
+      limits.get(t.provider)!(async () => {
+        const model = config.models[t.provider]!;
         const base = {
           kind: "generation" as const,
           cellId: t.cellId,
@@ -114,8 +116,8 @@ export async function runGeneration(args: {
           timestamp: new Date().toISOString(),
         };
         try {
-          const res = await adapters[t.provider]({ promptText: t.promptText, model });
-          okByProvider[t.provider]++;
+          const res = await adapters[t.provider]!({ promptText: t.promptText, model });
+          okByProvider.set(t.provider, (okByProvider.get(t.provider) ?? 0) + 1);
           append({ ...base, status: "ok", responseText: res.responseText, citations: res.citations });
         } catch (err) {
           progress.failed++;
@@ -128,9 +130,9 @@ export async function runGeneration(args: {
     ),
   );
 
-  const outageProviders = PROVIDERS.filter((p) => {
+  const outageProviders = providers.filter((p) => {
     const priorOk = args.existingOkByProvider?.[p] ?? 0;
-    const okFraction = (okByProvider[p] + priorOk) / Math.max(plannedByProvider[p], 1);
+    const okFraction = ((okByProvider.get(p) ?? 0) + priorOk) / Math.max(plannedPerProvider, 1);
     return okFraction < PROVIDER_OUTAGE_THRESHOLD;
   });
   return { outageProviders, progress };

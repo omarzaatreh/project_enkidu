@@ -37,9 +37,11 @@ const mk = (provider: Provider): Adapter => async (req) => {
   };
 };
 
+const adapters: Partial<Record<Provider, Adapter>> = {};
+for (const p of Object.keys(config.models) as Provider[]) adapters[p] = mk(p);
 await runGeneration({
   config,
-  adapters: { openai: mk("openai"), anthropic: mk("anthropic"), perplexity: mk("perplexity") },
+  adapters,
   existingCellIds: new Set(),
   append,
 });

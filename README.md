@@ -19,6 +19,25 @@ npm test
 a content hash of (prompt text, model, grounding config, sample index). Crash and
 re-run — completed cells are skipped, edited prompts re-run automatically.
 
+## Cost dial: model selection and sample count
+
+The config file is the parameter interface. `models` keys select which providers
+run (one = cheap report, three = full report); `samplesPerPrompt` sets depth
+(minimum 3 — below that every prompt is excluded as "insufficient samples").
+A future hosted UI writes this same config.
+
+```bash
+npm run run -- --config config/tikit-cheap.example.json   # anthropic-only, 3 samples
+```
+
+Cheap mode with 20 prompts: 20 × 1 provider × 3 samples = 60 grounded calls
+(~$1) vs the full 20 × 3 × 5 = 300 (~$5). The extraction pass always uses a
+cheap Anthropic model, so `ANTHROPIC_API_KEY` is required even when Anthropic
+isn't among the measured providers. Note: cross-model comparison ("Claude
+mentions you, ChatGPT doesn't") is the report's most persuasive block for
+multi-model buyers — cheap mode trades it away, so use it for iteration and
+first drafts, full mode for the client-facing send.
+
 ## Pre-send ritual (mandatory)
 
 Before any report goes to a client: spot-check 5–10 prompts by hand in the

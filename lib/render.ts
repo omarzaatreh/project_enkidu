@@ -202,7 +202,7 @@ function renderMethodology(agg: AggregateResult, config: RunConfig): string {
   const modelList = (Object.keys(config.models) as Provider[])
     .map(
       (provider) =>
-        `${htmlEscape(PROVIDER_DISPLAY_NAMES[provider])}: ${htmlEscape(config.models[provider])} (web search grounded)`,
+        `${htmlEscape(PROVIDER_DISPLAY_NAMES[provider])}: ${htmlEscape(config.models[provider] ?? "unknown")} (web search grounded)`,
     )
     .join(" &middot; ");
   const insufficient = agg.perModel.filter((m) => m.insufficientPrompts > 0);

@@ -52,8 +52,14 @@ export interface RunConfig {
   /** Hand-curated after the discovery pass; may start empty. */
   competitors: BrandConfig[];
   promptSet: PromptSet;
-  /** Pinned model ID per provider — printed in the methodology footer. */
-  models: Record<Provider, string>;
+  /**
+   * Model selection IS this map: only providers listed here run, with the
+   * pinned model ID given (printed in the methodology footer). One provider
+   * = the cheap report; all three = the full report. A future hosted UI
+   * writes this same config — keys(models) and samplesPerPrompt are the
+   * user-facing parameters.
+   */
+  models: Partial<Record<Provider, string>>;
   samplesPerPrompt: number;
   whiteLabel: WhiteLabelConfig;
   /** ISO date range shown on the report header. */

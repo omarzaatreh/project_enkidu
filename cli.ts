@@ -11,9 +11,9 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Cell, GenerationCell, Provider, RunConfig, TrendPoint } from "./lib/types.js";
-import { PROVIDER_OUTAGE_THRESHOLD } from "./lib/types.js";
+import { MIN_SAMPLES_PER_CELL, PROVIDER_OUTAGE_THRESHOLD } from "./lib/types.js";
 import { makeAdapters } from "./lib/adapters/index.js";
-import { runExtraction, runGeneration } from "./lib/runner.js";
+import { enabledProviders, runExtraction, runGeneration } from "./lib/runner.js";
 import { aggregate } from "./lib/aggregate.js";
 import { renderReport } from "./lib/render.js";
 
@@ -38,6 +38,13 @@ function loadConfig(path: string): RunConfig {
   if (!cfg.promptSet?.version) fail("config: promptSet.version is required (bump on any prompt edit)");
   if (!cfg.promptSet.prompts?.length) fail("config: promptSet.prompts is empty");
   if (!cfg.client?.name || !cfg.client?.domain) fail("config: client.name and client.domain are required");
+  if (enabledProviders(cfg).length === 0)
+    fail('config: models is empty — list at least one provider, e.g. {"anthropic": "claude-sonnet-5"}');
+  if (cfg.samplesPerPrompt < MIN_SAMPLES_PER_CELL)
+    console.warn(
+      `⚠ samplesPerPrompt=${cfg.samplesPerPrompt} is below the reporting minimum of ${MIN_SAMPLES_PER_CELL} — ` +
+        `every prompt would be excluded as "insufficient samples". Use ${MIN_SAMPLES_PER_CELL} or more.`,
+    );
   return cfg;
 }
 
@@ -62,11 +69,20 @@ async function cmdRun(): Promise<void> {
   const resultsPath = arg("results", "results/results.jsonl")!;
   const config = loadConfig(configPath);
 
-  const keys = {
-    openai: process.env.OPENAI_API_KEY ?? fail("OPENAI_API_KEY missing (.env)"),
-    anthropic: process.env.ANTHROPIC_API_KEY ?? fail("ANTHROPIC_API_KEY missing (.env)"),
-    perplexity: process.env.PERPLEXITY_API_KEY ?? fail("PERPLEXITY_API_KEY missing (.env)"),
+  const providers = enabledProviders(config);
+  const envKey: Record<Provider, string> = {
+    openai: "OPENAI_API_KEY",
+    anthropic: "ANTHROPIC_API_KEY",
+    perplexity: "PERPLEXITY_API_KEY",
   };
+  const keys: Partial<Record<Provider, string>> = {};
+  for (const p of providers) {
+    keys[p] = process.env[envKey[p]] ?? fail(`${envKey[p]} missing (.env) — required by enabled provider "${p}"`);
+  }
+  // The extraction pass always runs on a cheap Anthropic model, so its key is
+  // required even when anthropic isn't among the measured providers.
+  const anthropicKey =
+    keys.anthropic ?? process.env.ANTHROPIC_API_KEY ?? fail("ANTHROPIC_API_KEY missing (.env) — the extraction pass requires it");
 
   mkdirSync(dirname(resultsPath), { recursive: true });
   const cells = loadCells(resultsPath);
@@ -74,12 +90,15 @@ async function cmdRun(): Promise<void> {
     (c): c is GenerationCell => c.kind === "generation" && c.status === "ok",
   );
   const existingCellIds = new Set(okGeneration.map((c) => c.cellId));
-  const existingOkByProvider = { openai: 0, anthropic: 0, perplexity: 0 } as Record<Provider, number>;
-  for (const c of okGeneration) existingOkByProvider[c.provider]++;
+  const existingOkByProvider: Partial<Record<Provider, number>> = {};
+  for (const c of okGeneration) existingOkByProvider[c.provider] = (existingOkByProvider[c.provider] ?? 0) + 1;
 
   const append = (cell: Cell): void => appendFileSync(resultsPath, JSON.stringify(cell) + "\n");
 
-  console.log(`Run: ${config.promptSet.prompts.length} prompts × 3 providers × ${config.samplesPerPrompt} samples`);
+  const estCalls = config.promptSet.prompts.length * providers.length * config.samplesPerPrompt;
+  console.log(
+    `Run: ${config.promptSet.prompts.length} prompts × ${providers.length} provider(s) [${providers.join(", ")}] × ${config.samplesPerPrompt} samples = ${estCalls} calls`,
+  );
   if (existingCellIds.size > 0) console.log(`Resuming — ${existingCellIds.size} completed cells will be skipped.`);
 
   const outcome = await runGeneration({
@@ -95,10 +114,15 @@ async function cmdRun(): Promise<void> {
   });
 
   console.log("Extraction pass (cheap model, resumable)…");
-  const allCells = loadCells(resultsPath);
+  // Only enabled providers' cells are extracted — old cells from providers
+  // removed from the config must not spend extraction budget.
+  const enabledSet = new Set(providers);
+  const allCells = loadCells(resultsPath).filter(
+    (c) => c.kind === "extraction" || enabledSet.has(c.provider),
+  );
   const extProgress = await runExtraction({
     cells: allCells,
-    anthropicApiKey: keys.anthropic,
+    anthropicApiKey: anthropicKey,
     append,
     onProgress: (p) => {
       if (p.done % 50 === 0 || p.done === p.total)
@@ -130,15 +154,15 @@ async function cmdRender(): Promise<void> {
 
   // Outage guard: rendering a report with a dead provider column is a
   // founder decision (design doc report-level failure policy), not a default.
-  const byProvider: Record<Provider, { ok: number; planned: number }> = {
-    openai: { ok: 0, planned: config.promptSet.prompts.length * config.samplesPerPrompt },
-    anthropic: { ok: 0, planned: config.promptSet.prompts.length * config.samplesPerPrompt },
-    perplexity: { ok: 0, planned: config.promptSet.prompts.length * config.samplesPerPrompt },
-  };
+  // Only ENABLED providers are checked — cells from providers no longer in
+  // the config (e.g. after switching to a cheaper model set) are ignored.
+  const planned = config.promptSet.prompts.length * config.samplesPerPrompt;
+  const okCount = new Map<Provider, number>();
   for (const c of cells)
-    if (c.kind === "generation" && c.status === "ok") byProvider[c.provider].ok++;
-  const outages = (Object.keys(byProvider) as Provider[]).filter(
-    (p) => byProvider[p].ok / Math.max(byProvider[p].planned, 1) < PROVIDER_OUTAGE_THRESHOLD,
+    if (c.kind === "generation" && c.status === "ok")
+      okCount.set(c.provider, (okCount.get(c.provider) ?? 0) + 1);
+  const outages = enabledProviders(config).filter(
+    (p) => (okCount.get(p) ?? 0) / Math.max(planned, 1) < PROVIDER_OUTAGE_THRESHOLD,
   );
   if (outages.length > 0 && process.argv.indexOf("--acknowledge-outage") === -1) {
     fail(
@@ -153,7 +177,18 @@ async function cmdRender(): Promise<void> {
   // Only same-prompt-set-version points are comparable (design doc versioning rule).
   const comparableTrend = priorTrend.filter((t) => t.promptSetVersion === config.promptSet.version);
 
-  const agg = aggregate(cells, config, comparableTrend);
+  // Aggregate over enabled providers' cells only, and only extraction cells
+  // that join to a kept generation cell — a results file may carry cells from
+  // providers that were since removed from the config.
+  const enabledSet = new Set(enabledProviders(config));
+  const keptGenIds = new Set(
+    cells.filter((c) => c.kind === "generation" && enabledSet.has(c.provider)).map((c) => c.cellId),
+  );
+  const relevantCells = cells.filter((c) =>
+    c.kind === "generation" ? enabledSet.has(c.provider) : keptGenIds.has(c.generationCellId),
+  );
+
+  const agg = aggregate(relevantCells, config, comparableTrend);
   const html = renderReport(agg, config);
 
   mkdirSync(dirname(outPath), { recursive: true });

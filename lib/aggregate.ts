@@ -96,7 +96,7 @@ export function aggregate(
     }
     return {
       provider,
-      model: config.models[provider],
+      model: config.models[provider] ?? "unknown",
       completedRuns: completed.length,
       plannedRuns: plannedPerProvider,
       mentionRuns,

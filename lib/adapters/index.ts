@@ -5,14 +5,15 @@ import { makeOpenAIAdapter } from "./openai.js";
 import { makeAnthropicAdapter } from "./anthropic.js";
 import { makePerplexityAdapter } from "./perplexity.js";
 
-export function makeAdapters(keys: {
-  openai: string;
-  anthropic: string;
-  perplexity: string;
-}): Record<Provider, Adapter> {
-  return {
-    openai: makeOpenAIAdapter(keys.openai),
-    anthropic: makeAnthropicAdapter(keys.anthropic),
-    perplexity: makePerplexityAdapter(keys.perplexity),
-  };
+/** Builds adapters only for the providers whose keys are supplied — the set
+ * of enabled providers is driven by RunConfig.models, and cli.ts only
+ * demands the API keys those providers need. */
+export function makeAdapters(
+  keys: Partial<Record<Provider, string>>,
+): Partial<Record<Provider, Adapter>> {
+  const adapters: Partial<Record<Provider, Adapter>> = {};
+  if (keys.openai) adapters.openai = makeOpenAIAdapter(keys.openai);
+  if (keys.anthropic) adapters.anthropic = makeAnthropicAdapter(keys.anthropic);
+  if (keys.perplexity) adapters.perplexity = makePerplexityAdapter(keys.perplexity);
+  return adapters;
 }
