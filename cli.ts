@@ -10,9 +10,10 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Cell, GenerationCell, Provider, RunConfig, TrendPoint } from "./lib/types.js";
+import type { Cell, ExtractionCell, GenerationCell, Provider, RunConfig, TrendPoint } from "./lib/types.js";
 import { MIN_SAMPLES_PER_CELL, PROVIDER_OUTAGE_THRESHOLD } from "./lib/types.js";
 import { makeAdapters } from "./lib/adapters/index.js";
+import { dedupeExtractions } from "./lib/extract.js";
 import { enabledProviders, runExtraction, runGeneration } from "./lib/runner.js";
 import { aggregate } from "./lib/aggregate.js";
 import { renderReport } from "./lib/render.js";
@@ -122,6 +123,7 @@ async function cmdRun(): Promise<void> {
   );
   const extProgress = await runExtraction({
     cells: allCells,
+    client: config.client,
     anthropicApiKey: anthropicKey,
     append,
     onProgress: (p) => {
@@ -129,6 +131,29 @@ async function cmdRun(): Promise<void> {
         console.log(`  extraction: ${p.done}/${p.total} (${p.failed} failed)`);
     },
   });
+
+  // Curation candidates: discovered brands not yet in config.competitors.
+  // Filling that array is what populates the citation-gap table and makes
+  // the competitor bars authoritative instead of raw-extraction guesses.
+  const finalCells = loadCells(resultsPath);
+  const curatedNames = new Set(
+    [config.client, ...config.competitors].flatMap((b) => [b.name.toLowerCase(), ...b.aliases.map((a) => a.toLowerCase())]),
+  );
+  const latestExtractions = dedupeExtractions(
+    finalCells.filter((c): c is ExtractionCell => c.kind === "extraction"),
+  );
+  const discovered = new Map<string, number>();
+  for (const c of latestExtractions) {
+    for (const b of c.brands ?? []) {
+      if (curatedNames.has(b.toLowerCase())) continue;
+      discovered.set(b, (discovered.get(b) ?? 0) + 1);
+    }
+  }
+  if (discovered.size > 0) {
+    const top = [...discovered.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15);
+    console.log(`\nDiscovered competitor candidates (add the real ones to "competitors" in ${configPath}):`);
+    for (const [name, count] of top) console.log(`  ${String(count).padStart(3)}× ${name}`);
+  }
 
   if (outcome.outageProviders.length > 0) {
     console.error(
@@ -174,8 +199,13 @@ async function cmdRender(): Promise<void> {
   const priorTrend: TrendPoint[] = existsSync(trendPath)
     ? (JSON.parse(readFileSync(trendPath, "utf8")) as TrendPoint[])
     : [];
-  // Only same-prompt-set-version points are comparable (design doc versioning rule).
-  const comparableTrend = priorTrend.filter((t) => t.promptSetVersion === config.promptSet.version);
+  // Only same-prompt-set-version points are comparable (design doc versioning
+  // rule), and a prior point for the CURRENT period is dropped — re-rendering
+  // the same date range replaces its point rather than duplicating it (a
+  // same-day re-render otherwise produced a degenerate two-point flat trend).
+  const comparableTrend = priorTrend.filter(
+    (t) => t.promptSetVersion === config.promptSet.version && t.date !== config.dateRange.to,
+  );
 
   // Aggregate over enabled providers' cells only, and only extraction cells
   // that join to a kept generation cell — a results file may carry cells from

@@ -38,6 +38,13 @@ export interface BrandConfig {
   aliases: string[];
   /** Bare domain, e.g. "tikit.com". Counts as a mention ONLY in prose. */
   domain: string;
+  /**
+   * What kind of company this is, e.g. "influencer marketing agency".
+   * Drives category-aware competitor extraction: without it, extraction
+   * returns every brand named in an answer (agencies' client rosters —
+   * eBay, Spotify — surfaced as "competitors" in live testing).
+   */
+  industry?: string;
 }
 
 export interface WhiteLabelConfig {

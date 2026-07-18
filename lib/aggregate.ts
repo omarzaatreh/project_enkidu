@@ -23,7 +23,7 @@ import type {
   TrendPoint,
 } from "./types.js";
 import { MIN_SAMPLES_PER_CELL } from "./types.js";
-import { detectMention, tallyCompetitors } from "./extract.js";
+import { dedupeExtractions, detectMention, tallyCompetitors } from "./extract.js";
 
 const MAX_GAP_ROWS = 10;
 
@@ -39,7 +39,11 @@ export function aggregate(
   priorTrend: TrendPoint[],
 ): AggregateResult {
   const genCells = cells.filter((c): c is GenerationCell => c.kind === "generation");
-  const extractions = cells.filter((c): c is ExtractionCell => c.kind === "extraction");
+  // Latest-wins: superseded extraction cells (older prompt/model versions)
+  // remain in the append-only results file and must not double-count.
+  const extractions = dedupeExtractions(
+    cells.filter((c): c is ExtractionCell => c.kind === "extraction"),
+  );
 
   const providers = Object.keys(config.models) as Provider[];
   const plannedPerProvider =

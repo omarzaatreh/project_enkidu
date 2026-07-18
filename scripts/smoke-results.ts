@@ -60,7 +60,7 @@ for (const c of cells) {
     ];
     append({
       kind: "extraction",
-      cellId: extractionCellId({ generationCellId: gen.cellId, extractorModel: "smoke" }),
+      cellId: extractionCellId({ generationCellId: gen.cellId, extractorModel: "smoke", extractorPromptVersion: "smoke" }),
       generationCellId: gen.cellId,
       extractorModel: "smoke",
       status: "ok",

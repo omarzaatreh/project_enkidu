@@ -26,7 +26,7 @@ import type {
 import { PROVIDER_OUTAGE_THRESHOLD } from "./types.js";
 import { extractionCellId, generationCellId } from "./shared/cellId.js";
 import { callWithRetry, HttpError } from "./shared/callWithRetry.js";
-import { buildExtractionPrompt, parseExtractionResponse } from "./extract.js";
+import { buildExtractionPrompt, EXTRACTION_PROMPT_VERSION, parseExtractionResponse } from "./extract.js";
 
 export const GROUNDING_CONFIG = "web_search:on";
 export const PER_PROVIDER_CONCURRENCY = 3;
@@ -140,15 +140,18 @@ export async function runGeneration(args: {
 
 export async function runExtraction(args: {
   cells: Cell[];
+  /** Client identity — drives the category-aware extraction prompt. */
+  client: Pick<import("./types.js").BrandConfig, "name" | "industry">;
   anthropicApiKey: string;
   append: (cell: ExtractionCell) => void;
   onProgress?: (p: RunProgress) => void;
   extractorModel?: string;
   fetchImpl?: typeof fetch;
 }): Promise<RunProgress> {
-  const { cells, anthropicApiKey, append, onProgress } = args;
+  const { cells, client, anthropicApiKey, append, onProgress } = args;
   const extractorModel = args.extractorModel ?? EXTRACTOR_MODEL;
   const fetchImpl = args.fetchImpl ?? fetch;
+  const extractorPromptVersion = EXTRACTION_PROMPT_VERSION;
 
   const existingExtractions = new Set(
     cells.filter((c): c is ExtractionCell => c.kind === "extraction").map((c) => c.cellId),
@@ -157,7 +160,9 @@ export async function runExtraction(args: {
     (c): c is GenerationCell =>
       c.kind === "generation" &&
       c.status === "ok" &&
-      !existingExtractions.has(extractionCellId({ generationCellId: c.cellId, extractorModel })),
+      !existingExtractions.has(
+        extractionCellId({ generationCellId: c.cellId, extractorModel, extractorPromptVersion }),
+      ),
   );
 
   const limit = pLimit(PER_PROVIDER_CONCURRENCY);
@@ -166,7 +171,7 @@ export async function runExtraction(args: {
   await Promise.all(
     targets.map((gen) =>
       limit(async () => {
-        const cellId = extractionCellId({ generationCellId: gen.cellId, extractorModel });
+        const cellId = extractionCellId({ generationCellId: gen.cellId, extractorModel, extractorPromptVersion });
         const base = {
           kind: "extraction" as const,
           cellId,
@@ -176,7 +181,7 @@ export async function runExtraction(args: {
         };
         try {
           const raw = await callWithRetry(() =>
-            plainAnthropicCompletion(fetchImpl, anthropicApiKey, extractorModel, buildExtractionPrompt(gen.responseText ?? "")),
+            plainAnthropicCompletion(fetchImpl, anthropicApiKey, extractorModel, buildExtractionPrompt(gen.responseText ?? "", client)),
           );
           append({ ...base, status: "ok", brands: parseExtractionResponse(raw) });
         } catch (err) {

@@ -27,6 +27,15 @@ export function generationCellId(args: {
 export function extractionCellId(args: {
   generationCellId: string;
   extractorModel: string;
+  /**
+   * Version of the extraction PROMPT (see EXTRACTION_PROMPT_VERSION in
+   * lib/extract.ts). Part of the hash for the same reason prompt text is
+   * hashed into generation cells: improving the extraction prompt must
+   * invalidate stale extractions, not silently reuse them.
+   */
+  extractorPromptVersion: string;
 }): string {
-  return sha256(["ext", args.generationCellId, args.extractorModel].join("|"));
+  return sha256(
+    ["ext", args.generationCellId, args.extractorModel, args.extractorPromptVersion].join("|"),
+  );
 }

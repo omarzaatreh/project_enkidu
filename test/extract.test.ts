@@ -47,10 +47,25 @@ describe("proseContainsAlias — dot rule (verified against normalize.js behavio
 
 describe("buildExtractionPrompt", () => {
   it("embeds the response text and demands a strict JSON array with [] fallback", () => {
-    const prompt = buildExtractionPrompt("Clio and Smokeball are popular.");
+    const prompt = buildExtractionPrompt("Clio and Smokeball are popular.", {
+      name: "TIkit",
+      industry: "influencer marketing agency",
+    });
     expect(prompt).toContain("Clio and Smokeball are popular.");
     expect(prompt).toContain("JSON array");
     expect(prompt).toContain("Return [] if none");
+  });
+
+  it("is category-aware: names the client's industry and excludes client-roster brands", () => {
+    const prompt = buildExtractionPrompt("text", { name: "TIkit", industry: "influencer marketing agency" });
+    expect(prompt).toContain("influencer marketing agency");
+    expect(prompt).toContain("TIkit itself");
+    expect(prompt).toMatch(/clients, case studies, or example brands/);
+  });
+
+  it("falls back to a generic category when industry is absent", () => {
+    const prompt = buildExtractionPrompt("text", { name: "TIkit" });
+    expect(prompt).toContain("a company");
   });
 });
 
@@ -157,5 +172,31 @@ describe("tallyCompetitors", () => {
     expect(tallyCompetitors([], [], client, [])).toEqual([
       { name: "TIkit", mentions: 0, isClient: true },
     ]);
+  });
+});
+
+describe("dedupeExtractions — latest-wins over superseded extraction cells", () => {
+  it("keeps only the newest ok extraction per generation cell", async () => {
+    const { dedupeExtractions } = await import("../lib/extract.js");
+    const mk = (genId: string, ts: string, brands: string[], status: "ok" | "failed" = "ok") => ({
+      kind: "extraction" as const,
+      cellId: `${genId}-${ts}`,
+      generationCellId: genId,
+      extractorModel: "m",
+      status,
+      brands: status === "ok" ? brands : undefined,
+      timestamp: ts,
+    });
+    const cells = [
+      mk("g1", "2026-07-18T01:00:00Z", ["eBay", "Spotify"]), // stale v1 extraction
+      mk("g1", "2026-07-18T02:00:00Z", ["DEPT Agency"]), // v2 supersedes
+      mk("g2", "2026-07-18T01:30:00Z", ["Viral Nation"]),
+      mk("g3", "2026-07-18T01:00:00Z", ["junk"], "failed"), // failed never counts
+    ];
+    const kept = dedupeExtractions(cells);
+    expect(kept).toHaveLength(2);
+    const byGen = Object.fromEntries(kept.map((c) => [c.generationCellId, c.brands]));
+    expect(byGen["g1"]).toEqual(["DEPT Agency"]);
+    expect(byGen["g2"]).toEqual(["Viral Nation"]);
   });
 });

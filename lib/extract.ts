@@ -31,11 +31,28 @@ export function detectMention(responseText: string, brand: BrandConfig): boolean
  * Prompt for the cheap extractor model: strict JSON array of brand names,
  * no prose. parseExtractionResponse is the tolerant counterpart.
  */
-export function buildExtractionPrompt(responseText: string): string {
+/**
+ * Bump on ANY wording change to buildExtractionPrompt — it is hashed into
+ * extraction cell IDs so stale extractions re-run instead of being reused.
+ * v2: category-aware. v1 asked for "every company or brand name" and live
+ * testing surfaced agencies' client rosters (eBay, Spotify, IKEA) as
+ * competitors in the report's "who appears instead of you" bars.
+ */
+export const EXTRACTION_PROMPT_VERSION = "v2";
+
+export function buildExtractionPrompt(
+  responseText: string,
+  client: Pick<BrandConfig, "name" | "industry">,
+): string {
+  const category = client.industry ?? "company";
   return [
-    "You extract company and brand names from text.",
+    `You extract competitor names from text for ${client.name}, a ${category}.`,
     "",
-    "List every company or brand name mentioned in the text below.",
+    `List every ${category} (or company offering closely similar services) mentioned in the text below.`,
+    "Do NOT include:",
+    `- companies that are merely clients, case studies, or example brands served by a ${category}`,
+    "- social media platforms, marketplaces, or software tools",
+    `- ${client.name} itself`,
     "Respond with a STRICT JSON array of strings and nothing else —",
     'no prose, no explanation, no markdown. Example: ["Acme Corp", "Globex"]',
     "Return [] if none are mentioned.",
@@ -98,6 +115,28 @@ export function parseExtractionResponse(raw: string): string[] {
  *
  * Sorted descending by mentions; capped at client row + top 5 non-client.
  */
+/**
+ * Keeps only the LATEST ok extraction per generation cell.
+ *
+ * results.jsonl is append-only: when the extraction prompt or model changes,
+ * new cells are appended and the stale ones remain on disk. Consumers must
+ * never count both — live testing showed v1 (category-blind) and v2
+ * extractions double-tallying, resurfacing client-roster brands (eBay,
+ * Spotify) the v2 prompt had eliminated. Latest-wins is version-agnostic,
+ * so synthetic smoke extractions work under the same rule.
+ */
+export function dedupeExtractions(extractions: ExtractionCell[]): ExtractionCell[] {
+  const latest = new Map<string, ExtractionCell>();
+  for (const cell of extractions) {
+    if (cell.status !== "ok") continue;
+    const prev = latest.get(cell.generationCellId);
+    if (prev === undefined || cell.timestamp > prev.timestamp) {
+      latest.set(cell.generationCellId, cell);
+    }
+  }
+  return [...latest.values()];
+}
+
 export function tallyCompetitors(
   cells: GenerationCell[],
   extractions: ExtractionCell[],

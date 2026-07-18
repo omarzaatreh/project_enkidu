@@ -68,7 +68,7 @@ export function makeExtCell(
   const extractorModel = "cheap-extractor";
   const cell: ExtractionCell = {
     kind: "extraction",
-    cellId: extractionCellId({ generationCellId: gen.cellId, extractorModel }),
+    cellId: extractionCellId({ generationCellId: gen.cellId, extractorModel, extractorPromptVersion: "test" }),
     generationCellId: gen.cellId,
     extractorModel,
     status,

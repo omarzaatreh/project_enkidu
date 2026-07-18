@@ -2,7 +2,8 @@
   "client": {
     "name": "TIkit",
     "aliases": ["TIkit", "Tikit", "TIkit Agency"],
-    "domain": "tikit.com"
+    "domain": "tikit.com",
+    "industry": "influencer marketing agency"
   },
   "competitors": [],
   "promptSet": {
