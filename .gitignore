@@ -3,9 +3,7 @@
 .env.*
 !.env.example
 
-# Client competitive data never enters git history (eng review OV-6).
-# Anchored to the repo root so the top-level data dirs are ignored WITHOUT
-# also hiding source dirs of the same name (e.g. the app/api/reports route).
+# Client competitive data never enters git history (eng review OV-6)
 /results/
 results.jsonl
 /reports/

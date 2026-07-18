@@ -1,29 +1,61 @@
 /**
- * Placeholder home page — links into the routes Lane B will build. Intentionally
- * plain; it exists so `npm run ui` serves a real shell and the nav has a root.
+ * Cockpit launchpad — describes the workflow order and links into each screen.
+ * Server component (static): no data fetching here.
  */
 import { ROUTES } from "./lib/contract";
 
-const LINKS = [
-  { href: ROUTES.clients, label: "Clients", desc: "Client + white-label setup" },
-  { href: ROUTES.run, label: "Run", desc: "Run parameters, cost estimate, progress" },
-  { href: ROUTES.prompts, label: "Prompts", desc: "Prompt set with auto-versioning" },
-  { href: ROUTES.curation, label: "Curation", desc: "Promote discovered competitors" },
-  { href: ROUTES.reports, label: "Reports", desc: "Rendered reports + preview" },
+const STEPS = [
+  {
+    href: ROUTES.clients,
+    label: "Clients",
+    desc: "Set up the client brand, aliases, white-label, and competitors. This config JSON is the single source of truth for everything below.",
+  },
+  {
+    href: ROUTES.prompts,
+    label: "Prompts",
+    desc: "Write the buying-intent prompts. The prompt-set version auto-bumps on any edit; only changed prompts re-run (content-hash resume).",
+  },
+  {
+    href: ROUTES.run,
+    label: "Run",
+    desc: "Pick providers and samples, preview the cost estimate (marginal vs full), then Run. Live progress streams generation and extraction.",
+  },
+  {
+    href: ROUTES.curation,
+    label: "Curation",
+    desc: "Review discovered competitors by mention count and promote the real ones into the config. Re-rendering after curation is free.",
+  },
+  {
+    href: ROUTES.reports,
+    label: "Reports",
+    desc: "Preview rendered reports and open them full-screen.",
+  },
 ];
 
 export default function Home() {
   return (
     <>
-      <h1>enkidu cockpit</h1>
-      <p>Founder-only local control panel. Pick a screen:</p>
-      <ul>
-        {LINKS.map((l) => (
-          <li key={l.href}>
-            <a href={l.href}>{l.label}</a> — {l.desc}
+      <div className="page-header">
+        <h1>enkidu cockpit</h1>
+        <p>
+          Founder-only local control panel for the AI-visibility pipeline. Work
+          top to bottom:
+        </p>
+      </div>
+      <ol className="launchpad">
+        {STEPS.map((s) => (
+          <li key={s.href}>
+            <div className="lp-body">
+              <a href={s.href}>{s.label}</a>
+              <p>{s.desc}</p>
+            </div>
           </li>
         ))}
-      </ul>
+      </ol>
+      <p className="muted small">
+        Runs, reports, and API keys stay on this machine — the server binds
+        localhost only.
+      </p>
     </>
   );
 }
