@@ -83,7 +83,7 @@ read the exact responses the numbers came from before you trust them.
 - `scripts/` — dev/ops scripts (fixture capture, synthetic smoke data, deploy)
 - `test/` — Vitest suite and fixtures (`npm test`)
 
-Dependencies flow one direction: `app` → `backend/services` → `backend/core`, with `cli` as a second consumer.
+Dependencies flow one direction: `app` → `backend/services` → `backend/core`, with `cli` as a second consumer. For the data model, the resume/cell-hash design, the RunDriver seam, and how the report and cockpit numbers stay in sync, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Data hygiene
 
