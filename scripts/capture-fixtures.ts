@@ -1,5 +1,5 @@
 /**
- * Captures ONE real grounded response per provider into fixtures/, replacing
+ * Captures ONE real grounded response per provider into test/fixtures/, replacing
  * the synthetic fixtures. Run once API keys exist in .env:
  *
  *   npm run capture-fixtures
@@ -27,8 +27,8 @@ async function captureOpenAI(key: string) {
     { authorization: `Bearer ${key}` },
     { model: "gpt-5", input: PROMPT, tools: [{ type: "web_search" }] },
   );
-  writeFileSync("fixtures/openai.response.json", JSON.stringify(json, null, 2));
-  console.log("✓ fixtures/openai.response.json (real)");
+  writeFileSync("test/fixtures/openai.response.json", JSON.stringify(json, null, 2));
+  console.log("✓ test/fixtures/openai.response.json (real)");
 }
 
 async function captureAnthropic(key: string) {
@@ -42,8 +42,8 @@ async function captureAnthropic(key: string) {
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }],
     },
   );
-  writeFileSync("fixtures/anthropic.response.json", JSON.stringify(json, null, 2));
-  console.log("✓ fixtures/anthropic.response.json (real)");
+  writeFileSync("test/fixtures/anthropic.response.json", JSON.stringify(json, null, 2));
+  console.log("✓ test/fixtures/anthropic.response.json (real)");
 }
 
 async function capturePerplexity(key: string) {
@@ -52,8 +52,8 @@ async function capturePerplexity(key: string) {
     { authorization: `Bearer ${key}` },
     { model: "sonar", messages: [{ role: "user", content: PROMPT }] },
   );
-  writeFileSync("fixtures/perplexity.response.json", JSON.stringify(json, null, 2));
-  console.log("✓ fixtures/perplexity.response.json (real)");
+  writeFileSync("test/fixtures/perplexity.response.json", JSON.stringify(json, null, 2));
+  console.log("✓ test/fixtures/perplexity.response.json (real)");
 }
 
 const tasks: Array<Promise<void>> = [];

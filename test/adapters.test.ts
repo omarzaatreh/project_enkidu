@@ -15,7 +15,7 @@ import { parsePerplexityResponse } from "../backend/core/adapters/perplexity.js"
 import { urlToDomain } from "../backend/core/shared/normalize.js";
 
 function loadFixture(name: string): Record<string, unknown> {
-  const url = new URL(`../fixtures/${name}`, import.meta.url);
+  const url = new URL(`./fixtures/${name}`, import.meta.url);
   return JSON.parse(readFileSync(url, "utf8")) as Record<string, unknown>;
 }
 

@@ -18,7 +18,7 @@ trap 'rm -rf "$STAGE"' EXIT
 
 mkdir -p "$STAGE/$TOKEN"
 cp "$REPORT" "$STAGE/$TOKEN/index.html"
-cp "$(dirname "$0")/../deploy/vercel.json" "$STAGE/vercel.json"
+cp "$(dirname "$0")/vercel.json" "$STAGE/vercel.json"
 
 echo "Deploying $REPORT → /$TOKEN/ (X-Robots-Tag: noindex)"
 vercel deploy "$STAGE" --prod --yes
