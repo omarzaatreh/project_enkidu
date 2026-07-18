@@ -1,6 +1,6 @@
 {
   "name": "enkidu",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "AI Visibility Report — measure how often LLMs mention a brand, render a white-labelable report",

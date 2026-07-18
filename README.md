@@ -15,11 +15,12 @@ npm run ui              # http://127.0.0.1:4600
 
 A local, single-user web app that drives the whole workflow:
 
-- **Clients** — client name, domain, aliases, industry, white-label branding, competitors
-- **Prompts** — edit the buyer-intent prompts (the prompt-set version auto-bumps on any edit)
-- **Run** — pick providers and sample count, see a live resume-aware cost estimate, start a run with live progress
-- **Curation** — promote discovered competitors into the report with a checkbox, then re-render for free
-- **Reports** — preview rendered reports inline; stale ones (older than their data) are flagged
+- **Clients** — client name, domain, aliases, industry, white-label branding (accent-color picker + live logo preview), competitors, and the report's date range
+- **Prompts** — edit the buyer-intent prompts (the prompt-set version auto-bumps on any edit); each prompt shows a per-provider "mentioned x/n" performance chip once it has results
+- **Run** — pick providers and sample count, set the report period, see a live resume-aware cost estimate, then watch the run stream with per-provider progress bars, elapsed time, and per-cell failure detail (the actual error text, not just a count)
+- **Insights** — read your results without rendering a report: a prompt × provider mention heatmap, overall share-of-voice, a citation-domain leaderboard, competitor co-occurrence, and an answer explorer that opens the real AI responses per sample with brand mentions highlighted and citations listed
+- **Curation** — promote discovered competitors into the report with a checkbox; each candidate shows *why* it surfaced (which providers and prompts named it, plus a prose snippet), then re-render for free
+- **Reports** — browse rendered reports by friendly title, filter to the selected config, preview inline, and re-render a stale one (older than its data) in one click
 
 Bound to `127.0.0.1` only; API keys stay server-side and never reach the browser.
 
@@ -54,18 +55,28 @@ mentions you, ChatGPT doesn't") is the report's most persuasive block for
 multi-model buyers — cheap mode trades it away, so use it for iteration and
 first drafts, full mode for the client-facing send.
 
+## The report
+
+One self-contained, white-labeled HTML page. It leads with two labeled figures
+per model — "Mentioned in answers" (prose) and "Cited as a source" (citation
+metadata) — because a buyer's eyeball check counts citation chips too. Around
+those it adds an overall share-of-voice line, a "where AI systems get their
+information" source-domain leaderboard (the actionable GEO target list), a
+verbatim pull-quote from a real answer, a per-prompt breakdown of which buyer
+questions the client wins or loses, and a trend chart once there is more than
+one run to compare.
+
 ## Pre-send ritual (mandatory)
 
 Before any report goes to a client: spot-check 5–10 prompts by hand in the
 consumer ChatGPT / Claude / Perplexity apps and reconcile with the report's
-numbers. The report shows two labeled figures — "Mentioned in answers" (prose)
-and "Cited as a source" (citation metadata) — because a buyer's eyeball check
-counts citation chips too.
+numbers. The Insights page and its answer explorer make this fast — you can
+read the exact responses the numbers came from before you trust them.
 
 ## Project structure
 
-- `backend/core/` — the measurement engine, framework-free: provider adapters, runner, extraction, aggregation, HTML rendering
-- `backend/services/` — application logic shared by the CLI and cockpit: config store, run manager, render pipeline, curation, progress, cost estimate
+- `backend/core/` — the measurement engine, framework-free: provider adapters, runner, extraction, aggregation, insights, HTML rendering
+- `backend/services/` — application logic shared by the CLI and cockpit: config store, run manager, render pipeline, curation, insights, progress, cost estimate
 - `app/` — the Next.js cockpit (pages + thin API routes over `backend/services`)
 - `cli/` — the command-line entry point
 - `config/*.example.json` — config templates; real client configs live in `config/*.json` and are gitignored
