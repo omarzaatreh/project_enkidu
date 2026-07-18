@@ -11,7 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "ui": "next dev -p 4600 -H 127.0.0.1"
+    "ui": "next dev --webpack -p 4600 -H 127.0.0.1"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

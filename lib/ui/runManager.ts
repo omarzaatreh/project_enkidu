@@ -123,9 +123,17 @@ export function acquireLock(
     if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
     const existing = readLockFile(lockPath);
     if (existing && isAlive(existing.pid)) throw new RunInProgressError(existing);
-    // Stale (dead owner) or unreadable — reclaim.
+    // Stale (dead owner) or unreadable — reclaim. If a racing process reclaimed
+    // it first, our "wx" write loses with EEXIST: re-read and surface the winner
+    // as RunInProgressError rather than a raw errno.
     rmSync(lockPath, { force: true });
-    writeFileSync(lockPath, JSON.stringify(info), { flag: "wx" });
+    try {
+      writeFileSync(lockPath, JSON.stringify(info), { flag: "wx" });
+    } catch (raceErr) {
+      if ((raceErr as NodeJS.ErrnoException).code !== "EEXIST") throw raceErr;
+      const winner = readLockFile(lockPath);
+      throw new RunInProgressError(winner ?? { pid: -1, configName, startedAt: info.startedAt });
+    }
     return info;
   }
 }
