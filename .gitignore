@@ -4,9 +4,9 @@
 !.env.example
 
 # Client competitive data never enters git history (eng review OV-6)
-results/
+/results/
 results.jsonl
-reports/
+/reports/
 
 # Node
 node_modules/
