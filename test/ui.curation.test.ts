@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { curationCandidates, promoteCompetitors } from "../backend/services/curation.js";
 import { dedupeExtractions } from "../backend/core/extract.js";
 import type { Cell, ExtractionCell, RunConfig } from "../backend/core/types.js";
-import { makeBrand, makeConfig, makeExtCell, makeGenCell } from "./helpers.js";
+import { makeBrand, makeCitation, makeConfig, makeExtCell, makeGenCell } from "./helpers.js";
 
 /** The exact tally cli.ts used to compute inline (the pre-refactor block). */
 function oldCliTally(cells: Cell[], config: RunConfig): Array<[string, number]> {
@@ -127,12 +127,45 @@ describe("curationCandidates — R5 evidence (providers / promptIds / snippet)",
   });
 });
 
+describe("curationCandidates — suggestedDomain (citation co-occurrence)", () => {
+  const config = makeConfig({ client: makeBrand("TIkit") });
+
+  it("suggests the most co-cited domain, normalized (lowercased, www-stripped)", () => {
+    const g = makeGenCell({
+      citations: [
+        makeCitation("www.Globex.com"),
+        makeCitation("globex.com"),
+        makeCitation("reviews.example.org"),
+      ],
+    });
+    const c = curationCandidates([g, makeExtCell(g, ["Globex"])], config)[0]!;
+    expect(c.name).toBe("Globex");
+    expect(c.suggestedDomain).toBe("globex.com"); // 2 hits, both normalize to globex.com
+  });
+
+  it("breaks count ties by domain ascending for determinism", () => {
+    const g = makeGenCell({ citations: [makeCitation("zeta.com"), makeCitation("alpha.com")] });
+    const c = curationCandidates([g, makeExtCell(g, ["Globex"])], config)[0]!;
+    expect(c.suggestedDomain).toBe("alpha.com");
+  });
+
+  it("is empty when no cell naming the brand carried a citation", () => {
+    const g = makeGenCell({ citations: [] });
+    const c = curationCandidates([g, makeExtCell(g, ["Globex"])], config)[0]!;
+    expect(c.suggestedDomain).toBe("");
+  });
+});
+
 describe("promoteCompetitors", () => {
   const client = { ...makeBrand("TIkit"), industry: "legal tech" };
   const config = makeConfig({ client, competitors: [makeBrand("Existing")] });
 
   it("appends new competitors, dedupes input, and skips existing (case-insensitive)", () => {
-    const out = promoteCompetitors(config, ["Globex", "existing", "Globex"]);
+    const out = promoteCompetitors(config, [
+      { name: "Globex" },
+      { name: "existing" },
+      { name: "Globex" },
+    ]);
     expect(out.competitors).toHaveLength(2); // Existing + Globex
     const added = out.competitors.find((c) => c.name === "Globex");
     expect(added).toEqual({
@@ -143,8 +176,22 @@ describe("promoteCompetitors", () => {
     });
   });
 
+  it("stores the confirmed domain, normalized (lowercased, www-stripped)", () => {
+    const out = promoteCompetitors(config, [{ name: "Globex", domain: "www.Globex.com" }]);
+    expect(out.competitors.find((c) => c.name === "Globex")?.domain).toBe("globex.com");
+  });
+
+  it("keeps the first occurrence's domain when the same name is repeated", () => {
+    const out = promoteCompetitors(config, [
+      { name: "Globex", domain: "globex.com" },
+      { name: "globex", domain: "other.com" },
+    ]);
+    expect(out.competitors.filter((c) => c.name.toLowerCase() === "globex")).toHaveLength(1);
+    expect(out.competitors.find((c) => c.name === "Globex")?.domain).toBe("globex.com");
+  });
+
   it("does not mutate the input config", () => {
-    promoteCompetitors(config, ["Globex"]);
+    promoteCompetitors(config, [{ name: "Globex" }]);
     expect(config.competitors).toHaveLength(1);
   });
 });

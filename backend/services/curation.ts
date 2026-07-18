@@ -22,10 +22,37 @@ export interface CurationCandidate {
    * normalized the name differently and it isn't found in any answer's prose.
    */
   exampleSnippet: string;
+  /**
+   * Best-guess domain for this competitor: the citation domain cited most often
+   * across the ok cells that named this brand (normalized: lowercased, `www.`
+   * stripped). Ties broken by the domain string ascending for determinism.
+   * Empty string when no cell naming the brand carried any citation. This is a
+   * SUGGESTION for the curation UI to pre-fill — the founder confirms or edits
+   * it before promote, since the top co-cited domain may be a review/aggregator
+   * site rather than the competitor's own.
+   */
+  suggestedDomain: string;
+}
+
+/** A candidate being promoted, with the domain the founder confirmed for it. */
+export interface PromoteCompetitorInput {
+  name: string;
+  /** Bare host (e.g. "acme.com"); "" when the founder left it blank. */
+  domain?: string;
 }
 
 /** Chars of context to show on either side of the brand's first prose hit. */
 const SNIPPET_RADIUS = 120;
+
+/**
+ * Lowercase, trim, and strip a leading `www.` so a suggested/confirmed domain
+ * matches citation domains the same way the insights leaderboard normalizes
+ * both sides (mirrors normalizeDomain in insights.ts / aggregate.ts).
+ */
+function normalizeDomain(domain: string): string {
+  const lower = domain.trim().toLowerCase();
+  return lower.startsWith("www.") ? lower.slice(4) : lower;
+}
 
 /**
  * ±SNIPPET_RADIUS chars of `responseText` around the first case-insensitive
@@ -89,7 +116,12 @@ export function curationCandidates(
   const discovered = new Map<string, number>();
   // Evidence keyed by the SAME exact brand string as the count map, so casings
   // that count separately (e.g. "Ykone" vs "YKONE") keep separate evidence.
-  const evidence = new Map<string, { providers: Set<string>; promptIds: Set<string>; snippet: string }>();
+  // domainCounts tallies citation domains seen in cells naming this brand, so
+  // suggestedDomain can pick the most co-cited one (a good domain guess).
+  const evidence = new Map<
+    string,
+    { providers: Set<string>; promptIds: Set<string>; snippet: string; domainCounts: Map<string, number> }
+  >();
   for (const c of latestExtractions) {
     const gen = genById.get(c.generationCellId);
     for (const b of c.brands ?? []) {
@@ -100,12 +132,17 @@ export function curationCandidates(
       if (!gen) continue;
       let ev = evidence.get(b);
       if (!ev) {
-        ev = { providers: new Set(), promptIds: new Set(), snippet: "" };
+        ev = { providers: new Set(), promptIds: new Set(), snippet: "", domainCounts: new Map() };
         evidence.set(b, ev);
       }
       ev.providers.add(gen.provider);
       ev.promptIds.add(gen.promptId);
       if (ev.snippet === "") ev.snippet = buildSnippet(gen.responseText, b);
+      for (const ci of gen.citations ?? []) {
+        const d = normalizeDomain(ci.domain);
+        if (d.length === 0) continue;
+        ev.domainCounts.set(d, (ev.domainCounts.get(d) ?? 0) + 1);
+      }
     }
   }
   return [...discovered.entries()]
@@ -118,29 +155,48 @@ export function curationCandidates(
         providers: ev ? [...ev.providers] : [],
         promptIds: ev ? [...ev.promptIds] : [],
         exampleSnippet: ev?.snippet ?? "",
+        suggestedDomain: ev ? topDomain(ev.domainCounts) : "",
       };
     });
 }
 
 /**
- * Promote named candidates into config.competitors. Each new competitor gets
- * aliases defaulting to [name] and an empty domain (match-safe — an empty
- * domain never matches, per the design note), inheriting the client's industry
- * so category-aware extraction keeps working. Names already present (by
- * case-insensitive name) are skipped; the input list is de-duplicated too.
- * Returns a new RunConfig — the input is not mutated.
+ * The most-cited domain in the tally: highest count wins, the domain string
+ * ascending breaks ties (deterministic). "" when the tally is empty.
  */
-export function promoteCompetitors(config: RunConfig, names: string[]): RunConfig {
+function topDomain(counts: Map<string, number>): string {
+  let best = "";
+  let bestCount = 0;
+  for (const [domain, n] of counts) {
+    if (n > bestCount || (n === bestCount && (best === "" || domain < best))) {
+      best = domain;
+      bestCount = n;
+    }
+  }
+  return best;
+}
+
+/**
+ * Promote candidates into config.competitors. Each new competitor gets aliases
+ * defaulting to [name], the founder-confirmed domain (normalized to a bare host;
+ * "" stays match-safe per the design note — an empty domain never matches),
+ * and inherits the client's industry so category-aware extraction keeps working.
+ * A non-empty domain lights up the competitor's Insights leaderboard badge and
+ * lets URL-form mentions match. Names already present (by case-insensitive name)
+ * are skipped; the input list is de-duplicated by name too, keeping the FIRST
+ * occurrence's domain. Returns a new RunConfig — the input is not mutated.
+ */
+export function promoteCompetitors(config: RunConfig, promotions: PromoteCompetitorInput[]): RunConfig {
   const present = new Set(config.competitors.map((c) => c.name.toLowerCase()));
   const additions: BrandConfig[] = [];
-  for (const name of names) {
+  for (const { name, domain } of promotions) {
     const key = name.toLowerCase();
     if (present.has(key)) continue;
     present.add(key);
     additions.push({
       name,
       aliases: [name],
-      domain: "",
+      domain: normalizeDomain(domain ?? ""),
       industry: config.client.industry,
     });
   }

@@ -43,6 +43,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
   if (!isValidConfigName(body.configName))
     return NextResponse.json({ error: "invalid config name" }, { status: 400 });
+  // Every promote entry must carry a non-empty name; domain is optional string.
+  const valid = body.promote.every(
+    (p) =>
+      p != null &&
+      typeof p.name === "string" &&
+      p.name.trim().length > 0 &&
+      (p.domain === undefined || typeof p.domain === "string"),
+  );
+  if (!valid)
+    return NextResponse.json(
+      { error: "promote[] entries need a non-empty name and optional string domain" },
+      { status: 400 },
+    );
 
   let config;
   try {

@@ -172,10 +172,11 @@ export const API = {
     `/api/curation?config=${encodeURIComponent(name)}`,
 
   /**
-   * POST /api/curation  body: { configName: string; promote: string[] }
+   * POST /api/curation  body: { configName: string; promote: PromoteCompetitorInput[] }
    *   → { ok: true; competitors: number }
-   * Promotes the named candidates into config.competitors (aliases default to
-   * [name]; domain empty — match-safe) and returns the new competitor count.
+   * Promotes the candidates into config.competitors (aliases default to [name];
+   * domain is the founder-confirmed host, "" stays match-safe) and returns the
+   * new competitor count.
    */
   curationPromote: "/api/curation",
 
@@ -259,10 +260,17 @@ export interface CurationResponse {
   candidates: CurationCandidate[];
 }
 
+/** One candidate being promoted, with the founder-confirmed domain. */
+export interface PromoteCompetitorInput {
+  name: string;
+  /** Bare host (e.g. "acme.com"); "" when left blank. Backend normalizes it. */
+  domain: string;
+}
+
 /** POST /api/curation request body. */
 export interface Curation_PromoteRequest {
   configName: string;
-  promote: string[];
+  promote: PromoteCompetitorInput[];
 }
 
 /** POST /api/curation (promote) success response. */
@@ -426,6 +434,12 @@ export interface CurationCandidate {
   promptIds: string[];
   /** ±120 chars of prose around the brand's first occurrence; "" when absent. */
   exampleSnippet: string;
+  /**
+   * Best-guess domain: the citation domain most co-cited with this brand
+   * (normalized bare host), "" when none. A pre-fill for the promote UI's
+   * editable domain field — the founder confirms it before promote.
+   */
+  suggestedDomain: string;
 }
 
 // ---------------------------------------------------------------------------

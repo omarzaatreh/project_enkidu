@@ -24,6 +24,9 @@ export default function CurationPage() {
 
   const candidates = data?.candidates ?? [];
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  // Editable domain per candidate, keyed by name. Seeded from suggestedDomain
+  // when the list loads; the founder confirms or edits before promote.
+  const [domains, setDomains] = useState<Record<string, string>>({});
 
   // Hide 1-mention candidates to cut extractor noise. Defaults ON only when the
   // list is long enough (~20) that the noise is worth hiding by default.
@@ -31,10 +34,14 @@ export default function CurationPage() {
   const singleCount = candidates.filter((c) => c.count === 1).length;
   const visible = hideSingles ? candidates.filter((c) => c.count > 1) : candidates;
 
-  // Reset the selection + toggle default whenever the candidate list changes.
+  // Reset the selection + toggle default whenever the candidate list changes,
+  // and seed each candidate's domain field from its suggestion.
   useEffect(() => {
     setPicked(new Set());
     setHideSingles((data?.candidates?.length ?? 0) > 20);
+    const seed: Record<string, string> = {};
+    for (const c of data?.candidates ?? []) seed[c.name] = c.suggestedDomain;
+    setDomains(seed);
   }, [data]);
 
   const [promoting, setPromoting] = useState(false);
@@ -52,7 +59,7 @@ export default function CurationPage() {
 
   async function promote() {
     if (!selected || picked.size === 0) return;
-    const list = [...picked];
+    const list = [...picked].map((name) => ({ name, domain: (domains[name] ?? "").trim() }));
     setPromoting(true);
     setPromoteError(null);
     const res = await sendJson<CurationPromoteResponse>(API.curationPromote, "POST", {
@@ -172,6 +179,33 @@ export default function CurationPage() {
                         “{c.exampleSnippet}”
                       </p>
                     )}
+                    <label
+                      className="small muted"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.4rem",
+                        margin: "0.4rem 0 0",
+                        paddingLeft: "1.9rem",
+                      }}
+                    >
+                      domain:
+                      <input
+                        type="text"
+                        className="mono"
+                        placeholder="none — badge stays dark"
+                        value={domains[c.name] ?? ""}
+                        onChange={(e) =>
+                          setDomains((prev) => ({ ...prev, [c.name]: e.target.value }))
+                        }
+                        style={{ maxWidth: "16rem" }}
+                      />
+                      {c.suggestedDomain && (domains[c.name] ?? "") === c.suggestedDomain && (
+                        <span className="badge badge-version" title="Guessed from citations">
+                          suggested
+                        </span>
+                      )}
+                    </label>
                   </div>
                 ))}
               </div>
