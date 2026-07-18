@@ -550,3 +550,550 @@ hr.sep {
 .report-list li.active {
   background: #eef2ff;
 }
+
+/* R8: friendly-title row. The main column (Preview + title + stale badge) and
+ * the meta toolbar are the two flex columns; a stale re-render panel wraps to a
+ * full-width third row below them. */
+.report-row-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.report-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.report-title .mono {
+  word-break: break-all;
+}
+
+.report-rerender {
+  flex-basis: 100%;
+  margin-top: 0.35rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Insights page (R2). Inline SVG/CSS only — no chart library. Everything is
+ * fluid; wide tables scroll INSIDE .table-wrap so the page body never scrolls
+ * horizontally at 375px.
+ * ------------------------------------------------------------------------- */
+
+/* Only the wrapped table may scroll sideways — never the page. */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 0.75rem;
+}
+
+/* --- 1. Mention heatmap --- */
+table.heatmap {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.82rem;
+}
+
+.heatmap th,
+.heatmap td {
+  border: 1px solid var(--border);
+  padding: 0.4rem 0.5rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.heatmap thead th {
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #f6f7f9;
+  white-space: nowrap;
+}
+
+.heatmap th.prompt-col {
+  text-align: left;
+  font-weight: 500;
+  min-width: 11rem;
+  max-width: 20rem;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.heatmap .cat-row th {
+  text-align: left;
+  background: #f0f2f5;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.heatmap td.hm-cell {
+  position: relative;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 3.5rem;
+}
+
+.heatmap td.hm-empty {
+  color: var(--muted);
+  font-weight: 400;
+  background: var(--bg);
+}
+
+.flaky-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--bg);
+}
+
+.flaky-inline {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  vertical-align: baseline;
+}
+
+/* --- 2. Domain leaderboard --- */
+.hbars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.hbar-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 12rem) 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.hbar-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.hbar-label .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hbar-track {
+  height: 0.9rem;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.hbar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  min-width: 2px;
+  transition: width 0.3s ease;
+}
+
+.hbar-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.badge-comp {
+  color: #b42318;
+  background: #fef2f2;
+  border: 1px solid #f0c9c5;
+}
+
+/* --- 3. Share of voice --- */
+.sov {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.sov-hero {
+  flex: 1 1 10rem;
+}
+
+.sov-hero .sov-num {
+  display: block;
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.sov-hero .cap {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.4rem;
+}
+
+.sov-providers {
+  flex: 2 1 16rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* --- 4. Co-occurrence table --- */
+table.cooc {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.88rem;
+}
+
+.cooc th,
+.cooc td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+}
+
+.cooc thead th {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.cooc td.num-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* --- R3: expandable prompt answers panel --- */
+.heatmap tr.prompt-row {
+  cursor: pointer;
+}
+
+.heatmap tr.prompt-row:hover th.prompt-col,
+.heatmap tr.prompt-row.is-open th.prompt-col {
+  background: #f0f4ff;
+}
+
+.prompt-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.prompt-caret {
+  color: var(--accent);
+  flex: 0 0 auto;
+  line-height: 1.35;
+}
+
+.heatmap tr.answer-row td.answer-cell {
+  padding: 0;
+  text-align: left;
+  background: #fafbfc;
+}
+
+.answers {
+  padding: 1rem 1.1rem 1.2rem;
+}
+
+.answers-note {
+  margin: 0 0 0.9rem;
+}
+
+.answer-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  padding: 0.85rem 0.95rem;
+  margin-bottom: 0.9rem;
+}
+
+.answer-card:last-child {
+  margin-bottom: 0;
+}
+
+.answer-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.answer-provider {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.answer-model {
+  color: var(--muted);
+}
+
+.answer-sample {
+  color: var(--muted);
+  background: #f0f2f5;
+  border: 1px solid var(--border);
+  margin-left: auto;
+}
+
+.answer-prose {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--fg);
+}
+
+.mention-client {
+  background: rgba(26, 86, 219, 0.16);
+  color: var(--accent);
+  font-weight: 600;
+  border-radius: 3px;
+  padding: 0 0.12em;
+}
+
+.mention-comp {
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 2px;
+}
+
+.answer-brands,
+.answer-citations {
+  margin-top: 0.8rem;
+}
+
+.answer-brands {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.answer-brands-label {
+  margin-right: 0.15rem;
+}
+
+.chip {
+  display: inline-block;
+  padding: 0.12rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: 999px;
+  background: #f0f2f5;
+  border: 1px solid var(--border);
+  color: var(--fg);
+}
+
+.answer-citations ul {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+}
+
+.answer-citations li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.25rem 0;
+  font-size: 0.82rem;
+}
+
+.answer-citations a {
+  color: var(--accent);
+}
+
+.badge.cite-domain {
+  color: var(--muted);
+  background: #f0f2f5;
+  border: 1px solid var(--border);
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+/* R7: per-provider generation bars + terminal failure list */
+.provider-bars {
+  margin: 0.5rem 0 0.25rem;
+  padding-left: 0.9rem;
+  border-left: 2px solid var(--border);
+}
+
+.provider-bar + .provider-bar {
+  margin-top: 0.4rem;
+}
+
+.bar.bar-mini {
+  height: 0.35rem;
+  margin: 0.2rem 0;
+}
+
+details.failures summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.failure-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.6rem 0 0;
+}
+
+.failure-list li {
+  padding: 0.5rem 0;
+  border-top: 1px solid #fde68a;
+}
+
+.failure-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.failure-error {
+  margin-top: 0.25rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #7c2d12;
+}
+
+/* R10: per-prompt performance chips in the Prompts editor. Sourced from the
+   insights matrix (keyed by exact promptText); reuses the base `.chip`. The row
+   reserves a min-height so its loading / "no results" / chips states never shift
+   layout. */
+.prompt-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 1.55rem;
+  margin: 0 0 0.75rem;
+}
+
+.prompt-chip {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.prompt-chip-flaky {
+  margin-left: 0.4rem;
+  color: #92400e;
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+ * R9: daily-friction polish — active nav link, sticky save bar, accent color
+ * field (color input + hex + swatch), white-label logo preview. Additive only.
+ * ------------------------------------------------------------------------- */
+
+/* Active-route highlight in the nav (marked by app/components/Nav.tsx). */
+nav a.active {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 2px;
+}
+
+/* Sticky save toolbar (Clients + Prompts) — keeps Save reachable on long configs
+   while there are unsaved edits. Sits under the (non-sticky) top nav. */
+.save-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Accent color editor: native picker + synced hex text field + live swatch. */
+.color-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.color-field input[type="color"] {
+  width: 2.5rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.color-field .color-hex {
+  width: auto;
+  max-width: 9rem;
+  flex: 0 1 9rem;
+}
+
+.color-field .color-hex[aria-invalid="true"] {
+  border-color: #b42318;
+  color: #b42318;
+}
+
+.color-swatch {
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+/* Invalid hex → a hatched swatch (no fill) so a bad value is never silent. */
+.color-swatch.invalid {
+  background: repeating-linear-gradient(
+    45deg,
+    #fef2f2,
+    #fef2f2 3px,
+    #f0c9c5 3px,
+    #f0c9c5 6px
+  );
+  border-color: #f0c9c5;
+}
+
+/* White-label logo preview — bounded so it never causes a layout jump; hidden
+   entirely (via onError in the component) on a broken/unreachable URL. */
+.logo-preview {
+  display: block;
+  max-height: 3rem;
+  max-width: 12rem;
+  margin-top: 0.5rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  object-fit: contain;
+}

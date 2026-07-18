@@ -9,6 +9,7 @@
  * unless the caller acknowledges it.
  */
 import { aggregate } from "../core/aggregate.js";
+import { filterToCurrentCells } from "../core/cellFilter.js";
 import { renderReport } from "../core/render.js";
 import { enabledProviders } from "../core/runner.js";
 import { PROVIDER_OUTAGE_THRESHOLD } from "../core/types.js";
@@ -92,24 +93,8 @@ export function renderFromResults(args: {
   // Aggregate over enabled providers' CURRENT-prompt-set generation cells only,
   // plus extraction cells that join to a kept generation cell. Cells for prompts
   // since removed from the config are orphans in the append-only results file and
-  // must not pollute the counts.
-  const enabledSet = new Set(enabledProviders(config));
-  const currentPromptTexts = new Set(config.promptSet.prompts.map((p) => p.text));
-  const keptGenIds = new Set(
-    cells
-      .filter(
-        (c) =>
-          c.kind === "generation" &&
-          enabledSet.has(c.provider) &&
-          currentPromptTexts.has(c.promptText),
-      )
-      .map((c) => c.cellId),
-  );
-  const relevantCells = cells.filter((c) =>
-    c.kind === "generation"
-      ? enabledSet.has(c.provider) && currentPromptTexts.has(c.promptText)
-      : keptGenIds.has(c.generationCellId),
-  );
+  // must not pollute the counts. The insights page shares this exact filter.
+  const relevantCells = filterToCurrentCells(cells, config);
 
   const agg = aggregate(relevantCells, config, comparableTrend);
   const html = renderReport(agg, config);

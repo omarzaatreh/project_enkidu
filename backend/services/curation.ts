@@ -11,6 +11,38 @@ import type { BrandConfig, Cell, ExtractionCell, GenerationCell, RunConfig } fro
 export interface CurationCandidate {
   name: string;
   count: number;
+  /** Distinct providers whose answers named this brand (first-seen order). */
+  providers: string[];
+  /** Distinct prompt ids whose answers named this brand (first-seen order). */
+  promptIds: string[];
+  /**
+   * ±120 chars of responseText around the brand's FIRST prose occurrence
+   * (case-insensitive indexOf), whitespace-collapsed for inline display and
+   * bracketed with … when truncated. Empty string when the extractor
+   * normalized the name differently and it isn't found in any answer's prose.
+   */
+  exampleSnippet: string;
+}
+
+/** Chars of context to show on either side of the brand's first prose hit. */
+const SNIPPET_RADIUS = 120;
+
+/**
+ * ±SNIPPET_RADIUS chars of `responseText` around the first case-insensitive
+ * occurrence of `brand`. Returns "" when responseText is absent or the brand
+ * is not in the prose (extractor normalized the name differently). Whitespace
+ * is collapsed so the snippet renders on one muted line; … marks truncation.
+ */
+function buildSnippet(responseText: string | undefined, brand: string): string {
+  if (!responseText) return "";
+  const idx = responseText.toLowerCase().indexOf(brand.toLowerCase());
+  if (idx < 0) return "";
+  const start = Math.max(0, idx - SNIPPET_RADIUS);
+  const end = Math.min(responseText.length, idx + brand.length + SNIPPET_RADIUS);
+  let snippet = responseText.slice(start, end).replace(/\s+/g, " ").trim();
+  if (start > 0) snippet = `…${snippet}`;
+  if (end < responseText.length) snippet = `${snippet}…`;
+  return snippet;
 }
 
 /**
@@ -35,6 +67,12 @@ export function curationCandidates(
       ...b.aliases.map((a) => a.toLowerCase()),
     ]),
   );
+  // gen-cell lookup for the brand→provider/promptId/snippet join. Built once;
+  // used only to enrich candidates — it never touches the count tally below.
+  const genById = new Map<string, GenerationCell>();
+  for (const c of cells) {
+    if (c.kind === "generation") genById.set(c.cellId, c);
+  }
   let extractionCells = cells.filter((c): c is ExtractionCell => c.kind === "extraction");
   if (currentPromptTexts) {
     const keptGenIds = new Set(
@@ -49,15 +87,39 @@ export function curationCandidates(
   }
   const latestExtractions = dedupeExtractions(extractionCells);
   const discovered = new Map<string, number>();
+  // Evidence keyed by the SAME exact brand string as the count map, so casings
+  // that count separately (e.g. "Ykone" vs "YKONE") keep separate evidence.
+  const evidence = new Map<string, { providers: Set<string>; promptIds: Set<string>; snippet: string }>();
   for (const c of latestExtractions) {
+    const gen = genById.get(c.generationCellId);
     for (const b of c.brands ?? []) {
       if (curatedNames.has(b.toLowerCase())) continue;
+      // --- count tally: byte-identical to the pre-R5 CLI block ---
       discovered.set(b, (discovered.get(b) ?? 0) + 1);
+      // --- evidence join (side-effect only; does not affect the tally) ---
+      if (!gen) continue;
+      let ev = evidence.get(b);
+      if (!ev) {
+        ev = { providers: new Set(), promptIds: new Set(), snippet: "" };
+        evidence.set(b, ev);
+      }
+      ev.providers.add(gen.provider);
+      ev.promptIds.add(gen.promptId);
+      if (ev.snippet === "") ev.snippet = buildSnippet(gen.responseText, b);
     }
   }
   return [...discovered.entries()]
     .sort((a, b) => b[1] - a[1])
-    .map(([name, count]) => ({ name, count }));
+    .map(([name, count]) => {
+      const ev = evidence.get(name);
+      return {
+        name,
+        count,
+        providers: ev ? [...ev.providers] : [],
+        promptIds: ev ? [...ev.promptIds] : [],
+        exampleSnippet: ev?.snippet ?? "",
+      };
+    });
 }
 
 /**

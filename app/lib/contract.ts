@@ -11,11 +11,35 @@
 // RunConfig is the single source of truth for a run (see backend/core/types.ts). The GET
 // /api/configs/[name] endpoint returns it verbatim; PUT accepts it verbatim.
 // Bundler resolution (app/tsconfig.json) resolves this cross-config import.
-import type { RunConfig, Provider } from "../../backend/core/types";
+import type { RunConfig, Provider, Citation } from "../../backend/core/types";
+// Insights analytics shapes live in core (pure); GET /api/insights returns
+// InsightsResult verbatim, so the cockpit imports the whole set from here.
+import type {
+  InsightsResult,
+  MatrixCell,
+  BrandFraction,
+  DomainLeaderboard,
+  DomainLeaderboardRow,
+  ShareOfVoiceResult,
+  ShareOfVoice,
+  CoOccurrenceRow,
+  CategoryRollup,
+} from "../../backend/core/insights";
 
 // Re-exported so Lane A/B can `import type { RunConfig } from "@/app/lib/contract"`
 // without reaching across the tsconfig boundary into lib/ themselves.
-export type { RunConfig, Provider };
+export type { RunConfig, Provider, Citation };
+export type {
+  InsightsResult,
+  MatrixCell,
+  BrandFraction,
+  DomainLeaderboard,
+  DomainLeaderboardRow,
+  ShareOfVoiceResult,
+  ShareOfVoice,
+  CoOccurrenceRow,
+  CategoryRollup,
+};
 
 // ---------------------------------------------------------------------------
 // Response payload types
@@ -66,6 +90,12 @@ export type ProgressEvent =
       done: number;
       total: number;
       failed: number;
+      /**
+       * (R7) Per-enabled-provider generation breakdown. OPTIONAL and additive:
+       * old clients ignore it and old-shape frames (emitted without it, e.g. the
+       * in-process emitter ticks) still parse. Present on disk-derived frames.
+       */
+      byProvider?: ProviderProgress[];
     }
   | {
       /** Terminal frame — the stream closes after this. */
@@ -159,6 +189,17 @@ export const API = {
   render: "/api/render",
 
   /**
+   * GET /api/insights?config=name → InsightsResult
+   * Prompt × provider mention matrix, citation-domain leaderboard, share of
+   * voice, consistency (flaky) flags, client co-occurrence, and per-category
+   * rollup — all derived from the CURRENT config's cell set (orphans excluded,
+   * exactly as the report). Read-only; touches only config/ and results/.
+   */
+  insights: "/api/insights",
+  insightsPath: (name: string): string =>
+    `/api/insights?config=${encodeURIComponent(name)}`,
+
+  /**
    * GET /api/reports → ReportListEntry[] { file; mtime; stale }
    * Lists rendered reports, newest first (mtime is ISO 8601). `stale` is true
    * when the config's results file is newer than the rendered report.
@@ -171,6 +212,19 @@ export const API = {
    */
   report: (file: string): string =>
     `/api/reports/${encodeURIComponent(file)}`,
+
+  /**
+   * GET /api/answers?config=name&promptId=id → AnswersResponse
+   * The OK generation cells for ONE prompt — prose, citations, model, sample
+   * index, timestamp — each joined to its latest extraction's discovered brands,
+   * plus the client/competitor aliases for mention highlighting. Joins answers by
+   * promptText (resolved from promptId server-side) and applies the SAME
+   * orphan/enabled-provider filter as the heatmap. Scoped to one prompt so the
+   * payload stays small. Read-only; touches only config/ + results/.
+   */
+  answers: "/api/answers",
+  answersPath: (name: string, promptId: string): string =>
+    `/api/answers?config=${encodeURIComponent(name)}&promptId=${encodeURIComponent(promptId)}`,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -202,7 +256,7 @@ export interface ActiveRunResponse {
 
 /** GET /api/curation response. */
 export interface CurationResponse {
-  candidates: Array<{ name: string; count: number }>;
+  candidates: CurationCandidate[];
 }
 
 /** POST /api/curation request body. */
@@ -241,6 +295,43 @@ export interface OutageResponse {
   completion: Array<{ provider: string; completed: number; planned: number }>;
 }
 
+/**
+ * One OK generation cell for a prompt (GET /api/answers), joined to its latest
+ * extraction's discovered brands. `responseText` is raw prose — the client MUST
+ * render it as escaped text (never dangerouslySetInnerHTML).
+ */
+export interface AnswerCell {
+  provider: Provider;
+  model: string;
+  sampleIndex: number;
+  /** Raw prose answer. May contain markdown — render as literal text. */
+  responseText: string;
+  /** Parsed citations from provider metadata (empty when unavailable). */
+  citations: Citation[];
+  timestamp: string;
+  /** Latest-wins extractor-discovered brands for this cell. */
+  brands: string[];
+}
+
+/**
+ * GET /api/answers response: one prompt's OK samples plus the alias sets the
+ * panel highlights with. `clientAliases`/`competitorAliases` are scoped from the
+ * same config the cells were filtered against, so client-side highlighting
+ * mirrors the server's word-boundary alias semantics.
+ */
+export interface AnswersResponse {
+  /** The promptId echoed from the request. */
+  promptId: string;
+  /** The hash-faithful prompt text the answers were joined by. */
+  promptText: string;
+  /** client.name + aliases + domain (blanks dropped) — highlighted in accent. */
+  clientAliases: string[];
+  /** Every curated competitor's name + aliases — highlighted underlined. */
+  competitorAliases: string[];
+  /** OK samples for this prompt, sorted by provider then sampleIndex. */
+  cells: AnswerCell[];
+}
+
 /** GET /api/reports response element. */
 export interface ReportListEntry {
   file: string;
@@ -248,6 +339,31 @@ export interface ReportListEntry {
   mtime: string;
   /** true iff the config's results file exists and is newer than this report. */
   stale: boolean;
+  /**
+   * (R8) Config name parsed from the filename (`<config>-<date>.html`), or null
+   * when the filename doesn't match. Drives the friendly title, the per-config
+   * filter, and the target of a stale-report re-render.
+   */
+  configName: string | null;
+  /** (R8) Report date (YYYY-MM-DD) parsed from the filename, or null. */
+  reportDate: string | null;
+}
+
+/**
+ * (R8) Split a rendered-report filename into its config name and date — the
+ * inverse of `reportPath`. Reports are named `${configName}-YYYY-MM-DD.html`;
+ * anything that doesn't match yields `{ configName: null, reportDate: null }`.
+ * Pure (no I/O) so it can be unit-tested without touching the filesystem, and
+ * is the single source of truth for the report-name shape (route + tests).
+ */
+const REPORT_NAME_RE = /^(.+)-(\d{4}-\d{2}-\d{2})\.html$/;
+export function parseReportName(file: string): {
+  configName: string | null;
+  reportDate: string | null;
+} {
+  const m = REPORT_NAME_RE.exec(file);
+  if (!m) return { configName: null, reportDate: null };
+  return { configName: m[1] ?? null, reportDate: m[2] ?? null };
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +376,7 @@ export const ROUTES = {
   clients: "/clients",
   run: "/run",
   prompts: "/prompts",
+  insights: "/insights",
   curation: "/curation",
   reports: "/reports",
 } as const;
@@ -284,3 +401,76 @@ export const reportPath = (name: string, date: string): string =>
 
 /** Global single-run lock — one active run at a time (decision 3). */
 export const lockPath = "results/.run.lock";
+
+// ---------------------------------------------------------------------------
+// R5: curation candidate evidence. Kept in sync with backend/services/curation.ts
+// (CurationCandidate). Appended additively — the count/name tally is unchanged;
+// providers/promptIds/exampleSnippet are provenance shown per candidate row so
+// the founder can promote/ignore from evidence instead of a bare name+count.
+// ---------------------------------------------------------------------------
+
+/**
+ * One discovered-competitor candidate with the evidence behind it. `name` and
+ * `count` are the byte-identical CLI tally; the rest is provenance for the
+ * curation UI. `exampleSnippet` is RAW prose — the client MUST render it as
+ * escaped text (React default), never dangerouslySetInnerHTML.
+ */
+export interface CurationCandidate {
+  /** The exact brand string as the extractor returned it. */
+  name: string;
+  /** Mentions across deduped latest extractions (unchanged from pre-R5). */
+  count: number;
+  /** Distinct providers whose answers named this brand (first-seen order). */
+  providers: string[];
+  /** Distinct prompt ids whose answers named this brand (first-seen order). */
+  promptIds: string[];
+  /** ±120 chars of prose around the brand's first occurrence; "" when absent. */
+  exampleSnippet: string;
+}
+
+// ---------------------------------------------------------------------------
+// R7: live progress that explains itself — per-provider generation breakdown
+// and the failed-generation list. Appended additively; kept in sync with
+// backend/services/progress.ts (ProviderProgress / FailedGeneration).
+// ---------------------------------------------------------------------------
+
+/**
+ * One enabled provider's slice of the generation phase. Referenced by the
+ * OPTIONAL `byProvider` field on a generation/extraction ProgressEvent so the
+ * cockpit can draw one slim bar per provider that matches the disk totals.
+ */
+export interface ProviderProgress {
+  /** Provider key, e.g. "anthropic". */
+  provider: string;
+  done: number;
+  total: number;
+  failed: number;
+}
+
+/**
+ * One latest-wins failed generation cell for the CURRENT plan (GET
+ * /api/runs/failures). `error` is the RAW stored adapter message — the client
+ * MUST render it as escaped text (React default), never dangerouslySetInnerHTML.
+ */
+export interface RunFailure {
+  promptId: string;
+  provider: Provider;
+  sampleIndex: number;
+  /** Stored adapter error string ("" when a failed cell recorded none). */
+  error: string;
+  timestamp: string;
+}
+
+/** GET /api/runs/failures response. */
+export interface FailuresResponse {
+  failures: RunFailure[];
+}
+
+// GET /api/runs/failures?config=name → FailuresResponse
+//   Latest-wins failed generation cells for the current plan (same run/plan +
+//   cell-loading as /api/runs/progress). A cell that failed then succeeded on a
+//   retry is represented by its ok retry and is NOT listed. Read-only; touches
+//   only results/ + config/ server-side.
+export const RUNS_FAILURES = "/api/runs/failures";
+export const runsFailuresPath = (name: string): string =>
+  `/api/runs/failures?config=${encodeURIComponent(name)}`;

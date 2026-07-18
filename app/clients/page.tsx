@@ -81,6 +81,70 @@ function AliasEditor({
   );
 }
 
+/** A 6-digit hex like #1a56db — the shape the native color input emits/accepts. */
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * R9: accent color editor — a native `<input type="color">` (which always emits
+ * a valid #rrggbb), a hex text field kept in sync with it, and a live swatch.
+ * Because the color picker guarantees validity, a wrong color can't be saved
+ * silently; and if the founder hand-types an invalid hex the swatch + the
+ * field's invalid styling flag it immediately (never a silent bad save).
+ */
+function AccentColorField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const valid = HEX_RE.test(value);
+  return (
+    <div className="color-field">
+      <input
+        type="color"
+        aria-label="Accent color picker"
+        value={valid ? value : "#000000"}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <input
+        type="text"
+        className="color-hex mono"
+        value={value}
+        placeholder="#1a56db"
+        aria-label="Accent color hex"
+        aria-invalid={!valid}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <span
+        className={valid ? "color-swatch" : "color-swatch invalid"}
+        aria-hidden="true"
+        style={valid ? { background: value } : undefined}
+        title={valid ? value : "invalid hex"}
+      />
+    </div>
+  );
+}
+
+/**
+ * R9: white-label logo preview so the founder can verify the URL before a report
+ * renders. Fails gracefully — a broken/unreachable URL just hides the image (no
+ * broken-image icon). Keyed on the URL by the caller so a new URL remounts and
+ * clears the previous error state.
+ */
+function LogoPreview({ url }: { url: string }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) return null;
+  return (
+    <img
+      className="logo-preview"
+      src={url}
+      alt="Logo preview"
+      onError={() => setBroken(true)}
+    />
+  );
+}
+
 export default function ClientsPage() {
   const [selected, select] = useSelectedConfig();
   const url = selected ? API.config(selected) : null;
@@ -103,6 +167,19 @@ export default function ClientsPage() {
   }, [data]);
 
   const dirty = draft !== null && JSON.stringify(draft) !== original;
+
+  // R9: warn on tab close / navigation while there are unsaved edits. Registered
+  // only while `dirty` (the page's single source of truth), and torn down when
+  // it clears or the page unmounts — so it never fires on a clean config.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
 
   function patch(fn: (d: RunConfig) => void) {
     setDraft((prev) => {
@@ -167,7 +244,7 @@ export default function ClientsPage() {
 
       {selected && draft && (
         <>
-          <div className="toolbar" style={{ marginBottom: "1rem" }}>
+          <div className="toolbar save-bar" style={{ marginBottom: "1rem" }}>
             <button
               type="button"
               className="btn btn-primary"
@@ -233,12 +310,10 @@ export default function ClientsPage() {
                   onChange={(e) => patch((d) => (d.whiteLabel.agencyName = e.target.value))}
                 />
               </Field>
-              <Field label="Accent color">
-                <input
-                  type="text"
+              <Field label="Accent color" hint="Report header accent — pick, or type a #rrggbb hex.">
+                <AccentColorField
                   value={draft.whiteLabel.accentColor}
-                  placeholder="#1a56db"
-                  onChange={(e) => patch((d) => (d.whiteLabel.accentColor = e.target.value))}
+                  onChange={(next) => patch((d) => (d.whiteLabel.accentColor = next))}
                 />
               </Field>
             </div>
@@ -255,7 +330,34 @@ export default function ClientsPage() {
                   })
                 }
               />
+              {draft.whiteLabel.logoUrl && (
+                <LogoPreview key={draft.whiteLabel.logoUrl} url={draft.whiteLabel.logoUrl} />
+              )}
             </Field>
+          </Section>
+
+          <Section
+            title="Report period"
+            desc="ISO date window shown on the rendered report header; the “to” date also files the trend point."
+          >
+            <div className="row">
+              <Field label="From">
+                <input
+                  type="date"
+                  value={draft.dateRange.from}
+                  onChange={(e) => patch((d) => (d.dateRange.from = e.target.value))}
+                  style={{ maxWidth: "12rem" }}
+                />
+              </Field>
+              <Field label="To">
+                <input
+                  type="date"
+                  value={draft.dateRange.to}
+                  onChange={(e) => patch((d) => (d.dateRange.to = e.target.value))}
+                  style={{ maxWidth: "12rem" }}
+                />
+              </Field>
+            </div>
           </Section>
 
           <Section

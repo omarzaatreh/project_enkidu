@@ -5,7 +5,7 @@
  * call per new ok cell (assumes new calls succeed) — a rough pre-run number.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { loadConfig } from "../../../backend/services/configStore";
+import { isValidConfigName, loadConfig } from "../../../backend/services/configStore";
 import { estimateCalls } from "../../../backend/services/estimate";
 import { resultsPath } from "../../lib/contract";
 import { EXTRACTION_PER_CALL_USD, PER_CALL_USD } from "../../lib/pricing";
@@ -17,6 +17,8 @@ export const dynamic = "force-dynamic";
 export function GET(req: NextRequest): NextResponse {
   const name = req.nextUrl.searchParams.get("config");
   if (!name) return NextResponse.json({ error: "config query param required" }, { status: 400 });
+  if (!isValidConfigName(name))
+    return NextResponse.json({ error: "invalid config name" }, { status: 400 });
 
   let config;
   try {

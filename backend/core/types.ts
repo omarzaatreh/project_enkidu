@@ -166,6 +166,72 @@ export interface TrendPoint {
   overallMentionRate: number;
 }
 
+// ---------- R4: richer report sections (all OPTIONAL on AggregateResult) ----------
+
+/**
+ * Overall share of voice for the hero line. Computed over the SAME
+ * sufficiency-respecting completed cells as the stat cards, so it never
+ * disagrees with the headline mention figures. `clientMentions` here equals
+ * the summed per-model mentionRuns.
+ */
+export interface ShareOfVoiceSummary {
+  /** Client prose mentions across sufficient completed runs. */
+  clientMentions: number;
+  /** Client + curated-competitor prose mentions across those same runs. */
+  totalMentions: number;
+  /** clientMentions / totalMentions; 0 (never NaN) when the total is 0. */
+  share: number;
+}
+
+/** One row of the "where AI systems get their information" source leaderboard. */
+export interface SourceLeaderboardRow {
+  /** Normalized citation domain, e.g. "byrdie.com". */
+  domain: string;
+  /**
+   * Completed runs that cite this domain at least once. Counted UNIQUELY per
+   * run (a run citing the domain twice counts once) — distinct from R1's
+   * occurrence tally — so "% of runs" = runsCiting / completedRuns is honest.
+   */
+  runsCiting: number;
+  /** true iff domain equals the client's configured domain (normalized). */
+  clientCited: boolean;
+}
+
+/** Source leaderboard plus its run denominator, for the "% of runs" figure. */
+export interface SourceLeaderboard {
+  /** Completed runs — the "% of runs" denominator. */
+  completedRuns: number;
+  /** Top domains by runsCiting, descending. */
+  rows: SourceLeaderboardRow[];
+}
+
+/** A verbatim pull-quote lifted from one response, for the editorial blockquote. */
+export interface PullQuote {
+  /** The extracted sentence, UNESCAPED — the renderer must htmlEscape it. */
+  text: string;
+  /** Provider whose answer the quote came from. */
+  provider: Provider;
+  /** Brand the sentence was selected around (client or top competitor). */
+  brand: string;
+  /** true when it is the client's own first mention; false when it fell back to the top competitor. */
+  isClient: boolean;
+}
+
+/** Per-provider client-mention tally within one prompt (appendix cell). */
+export interface PromptProviderCell {
+  provider: Provider;
+  /** Completed (sufficient) samples for this prompt × provider. */
+  samples: number;
+  /** Samples where the client was mentioned in prose. */
+  mentioned: number;
+}
+
+/** One appendix row: a prompt and its per-provider client-mention counts. */
+export interface PromptBreakdownRow {
+  promptText: string;
+  cells: PromptProviderCell[];
+}
+
 export interface AggregateResult {
   client: BrandConfig;
   perModel: ModelStats[];
@@ -177,6 +243,15 @@ export interface AggregateResult {
   totalPlanned: number;
   totalCompleted: number;
   generatedAt: string;
+  // ---- R4 additions: all OPTIONAL so older serialized results still parse ----
+  /** (R4.1) Overall share of voice for the hero line. */
+  shareOfVoice?: ShareOfVoiceSummary;
+  /** (R4.2) "Where AI systems get their information" source leaderboard. */
+  sources?: SourceLeaderboard;
+  /** (R4.3) One verbatim editorial pull-quote. Absent when no brand is named anywhere. */
+  pullQuote?: PullQuote;
+  /** (R4.4) Per-prompt × per-provider client-mention appendix. */
+  promptBreakdown?: PromptBreakdownRow[];
 }
 
 // ---------- Runner policy constants (design doc, partial-failure policy) ----------

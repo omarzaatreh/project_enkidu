@@ -43,7 +43,7 @@ describe("curationCandidates parity with the old CLI block", () => {
   });
 
   it("excludes curated names case-insensitively and counts the rest", () => {
-    expect(curationCandidates(cells, config)).toEqual([
+    expect(curationCandidates(cells, config).map((c) => ({ name: c.name, count: c.count }))).toEqual([
       { name: "Globex", count: 2 },
       { name: "Initech", count: 1 },
     ]);
@@ -62,7 +62,7 @@ describe("curationCandidates — current-prompt-set filter", () => {
   ];
 
   it("keeps every extraction when no prompt set is supplied (legacy behaviour)", () => {
-    expect(curationCandidates(cells, config)).toEqual([
+    expect(curationCandidates(cells, config).map((c) => ({ name: c.name, count: c.count }))).toEqual([
       { name: "Globex", count: 1 },
       { name: "Initech", count: 1 },
     ]);
@@ -70,9 +70,60 @@ describe("curationCandidates — current-prompt-set filter", () => {
 
   it("drops extractions joined to orphaned generation cells when the prompt set is supplied", () => {
     const currentPromptTexts = new Set(config.promptSet.prompts.map((p) => p.text));
-    expect(curationCandidates(cells, config, currentPromptTexts)).toEqual([
-      { name: "Globex", count: 1 },
-    ]);
+    expect(
+      curationCandidates(cells, config, currentPromptTexts).map((c) => ({
+        name: c.name,
+        count: c.count,
+      })),
+    ).toEqual([{ name: "Globex", count: 1 }]);
+  });
+});
+
+describe("curationCandidates — R5 evidence (providers / promptIds / snippet)", () => {
+  const config = makeConfig({ client: makeBrand("TIkit") });
+
+  // A real-shaped client-roster sentence: the agency (a legit competitor) lists
+  // eBay as a CLIENT — the snippet must expose that so the founder skips eBay.
+  const roster =
+    "Socially Powerful delivers reach for brands including eBay, Spotify, Amazon, and IKEA, and has earned repeated recognition.";
+  // Same brand named by two providers under two distinct prompts.
+  const gA = {
+    ...makeGenCell({ provider: "openai", promptText: "q-a", responseText: roster }),
+    promptId: "prompt-a",
+  };
+  const gB = {
+    ...makeGenCell({ provider: "anthropic", promptText: "q-b", responseText: roster }),
+    promptId: "prompt-b",
+  };
+  const cells: Cell[] = [gA, gB, makeExtCell(gA, ["eBay"]), makeExtCell(gB, ["eBay"])];
+
+  it("joins each brand to its distinct providers, prompt ids, and a revealing snippet", () => {
+    const ebay = curationCandidates(cells, config)[0]!;
+    expect(ebay.name).toBe("eBay");
+    expect(ebay.count).toBe(2); // count parity: one per deduped extraction cell
+    expect([...ebay.providers].sort()).toEqual(["anthropic", "openai"]);
+    expect([...ebay.promptIds].sort()).toEqual(["prompt-a", "prompt-b"]);
+    // The snippet reveals eBay as a CLIENT of the agency, not a competitor.
+    expect(ebay.exampleSnippet).toContain("brands including eBay, Spotify, Amazon, and IKEA");
+  });
+
+  it("returns an empty snippet when the extractor's name is not in the prose", () => {
+    // Extractor surfaced a name the response prose does not contain verbatim.
+    const g = makeGenCell({ responseText: "Nothing matching here at all." });
+    const c = curationCandidates([g, makeExtCell(g, ["Globex"])], config)[0]!;
+    expect(c.name).toBe("Globex");
+    expect(c.exampleSnippet).toBe("");
+    expect(c.providers).toEqual(["openai"]);
+    expect(c.promptIds).toEqual(["p1"]);
+  });
+
+  it("brackets a mid-prose snippet with … on both sides", () => {
+    const long = `${"x ".repeat(150)}Globex Corp${" y".repeat(150)}`;
+    const g = makeGenCell({ responseText: long });
+    const c = curationCandidates([g, makeExtCell(g, ["Globex"])], config)[0]!;
+    expect(c.exampleSnippet.startsWith("…")).toBe(true);
+    expect(c.exampleSnippet.endsWith("…")).toBe(true);
+    expect(c.exampleSnippet).toContain("Globex");
   });
 });
 

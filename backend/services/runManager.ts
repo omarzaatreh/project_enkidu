@@ -14,14 +14,17 @@ import { dirname } from "node:path";
 import type { Cell, GenerationCell, Provider, RunConfig } from "../core/types.js";
 import { makeAdapters } from "../core/adapters/index.js";
 import { enabledProviders, runExtraction, runGeneration } from "../core/runner.js";
-import { loadConfig } from "./configStore.js";
+import { assertValidConfigName, loadConfig } from "./configStore.js";
 import { computeOutageProviders } from "./renderPipeline.js";
 import { ENV_KEY, loadDotEnv, MissingKeyError } from "./env.js";
 
 // Per-config on-disk layout (mirrors app/lib/contract.ts — kept in sync there;
 // backend/services cannot import app/ under the root tsconfig).
 export const LOCK_PATH = "results/.run.lock";
-const resultsPathFor = (name: string): string => `results/${name}.jsonl`;
+const resultsPathFor = (name: string): string => {
+  assertValidConfigName(name); // guard before name becomes a results/ path
+  return `results/${name}.jsonl`;
+};
 
 /** Lockfile contents. */
 export interface LockInfo {
@@ -168,6 +171,7 @@ export function activeRun(
  * generation → extraction passes, releasing the lock in a finally.
  */
 export function startRun(configName: string): void {
+  assertValidConfigName(configName); // reject traversal before acquiring the lock
   const lock = acquireLock(configName);
 
   let config: RunConfig;

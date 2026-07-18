@@ -5,7 +5,7 @@
  * the config (auto-bumping nothing — prompt texts are untouched).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { loadConfig, saveConfig } from "../../../backend/services/configStore";
+import { isValidConfigName, loadConfig, saveConfig } from "../../../backend/services/configStore";
 import { curationCandidates, promoteCompetitors } from "../../../backend/services/curation";
 import { resultsPath } from "../../lib/contract";
 import type {
@@ -20,6 +20,8 @@ export const dynamic = "force-dynamic";
 export function GET(req: NextRequest): NextResponse {
   const name = req.nextUrl.searchParams.get("config");
   if (!name) return NextResponse.json({ error: "config query param required" }, { status: 400 });
+  if (!isValidConfigName(name))
+    return NextResponse.json({ error: "invalid config name" }, { status: 400 });
 
   let config;
   try {
@@ -39,6 +41,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!body?.configName || !Array.isArray(body.promote)) {
     return NextResponse.json({ error: "configName and promote[] required" }, { status: 400 });
   }
+  if (!isValidConfigName(body.configName))
+    return NextResponse.json({ error: "invalid config name" }, { status: 400 });
 
   let config;
   try {

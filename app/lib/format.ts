@@ -37,6 +37,34 @@ export function slugify(text: string): string {
   return s || "prompt";
 }
 
+/**
+ * Today's date as a plain YYYY-MM-DD string in the browser's LOCAL time zone.
+ * Deliberately not `new Date().toISOString()` — that is UTC and would flip the
+ * day near midnight. Used to compare against a config's `dateRange.to` (which is
+ * a bare local calendar date, no time component).
+ */
+export function todayLocalISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Format a bare YYYY-MM-DD calendar date as "Jul 18, 2026". Parsed from its
+ * parts (not `new Date("2026-07-18")`, which is UTC midnight and can shift the
+ * day in a negative-offset time zone). Invalid input → the raw string.
+ */
+export function day(date: string | null | undefined): string {
+  if (!date) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) return date;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (Number.isNaN(d.getTime())) return date;
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
 /** Format an ISO timestamp for display; invalid → the raw string. */
 export function when(iso: string | null | undefined): string {
   if (!iso) return "";

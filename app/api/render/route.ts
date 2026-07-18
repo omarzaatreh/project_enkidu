@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
-import { loadConfig } from "../../../backend/services/configStore";
+import { isValidConfigName, loadConfig } from "../../../backend/services/configStore";
 import { isOutage, providerCompletion, renderFromResults } from "../../../backend/services/renderPipeline";
 import { reportPath, resultsPath, trendPath } from "../../lib/contract";
 import type { OutageResponse, RenderRequest, RenderResponse } from "../../lib/contract";
@@ -22,6 +22,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!body?.configName) {
     return NextResponse.json({ error: "configName required" }, { status: 400 });
   }
+  if (!isValidConfigName(body.configName))
+    return NextResponse.json({ error: "invalid config name" }, { status: 400 });
 
   let config;
   try {
@@ -56,8 +58,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json(res, { status: 409 });
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const outPath = reportPath(body.configName, today);
+  // Date the report file by the reporting period's end, not the render day, so
+  // the filename matches the header (render.ts) and the trend point
+  // (aggregate.ts), and a re-render of the same period overwrites one file
+  // (idempotent) instead of accumulating one copy per render day.
+  const outPath = reportPath(body.configName, config.dateRange.to);
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, result.html);
 

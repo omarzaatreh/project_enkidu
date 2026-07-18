@@ -21,6 +21,11 @@ const STEPS = [
     desc: "Pick providers and samples, preview the cost estimate (marginal vs full), then Run. Live progress streams generation and extraction.",
   },
   {
+    href: ROUTES.insights,
+    label: "Insights",
+    desc: "See where you stand: the prompt × provider mention heatmap, citation-domain leaderboard, share of voice, and who shows up with or instead of you.",
+  },
+  {
     href: ROUTES.curation,
     label: "Curation",
     desc: "Review discovered competitors by mention count and promote the real ones into the config. Re-rendering after curation is free.",

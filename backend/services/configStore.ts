@@ -17,6 +17,36 @@ import type { RunConfig } from "../core/types.js";
 export const CONFIG_DIR = "config";
 
 /**
+ * Single source of truth for "is this config name safe to turn into a path?".
+ * A config `name` becomes filesystem paths (config/<name>.json,
+ * results/<name>.jsonl, reports/<name>-<date>.html), so an unsanitized name with
+ * `../` could traverse outside those dirs. Allowed: letters, digits, dot,
+ * underscore, hyphen — so real names like "full.example" pass. Any name
+ * containing ".." is rejected even though each char is individually allowed, so
+ * "..", "../etc", "a/b", "a\\b", and "" all fail. Applied at EVERY point a name
+ * becomes a path (loadConfig/saveConfig/resultsPathFor and the API routes).
+ */
+const CONFIG_NAME_RE = /^[A-Za-z0-9._-]+$/;
+
+export function isValidConfigName(name: string): boolean {
+  return typeof name === "string" && CONFIG_NAME_RE.test(name) && !name.includes("..");
+}
+
+/** Thrown when a name that would become a path fails {@link isValidConfigName}. */
+export class InvalidConfigNameError extends Error {
+  constructor() {
+    // Deliberately path-free so the message can be surfaced without leaking layout.
+    super("invalid config name");
+    this.name = "InvalidConfigNameError";
+  }
+}
+
+/** Guard a name before it becomes a path; throws InvalidConfigNameError if unsafe. */
+export function assertValidConfigName(name: string): void {
+  if (!isValidConfigName(name)) throw new InvalidConfigNameError();
+}
+
+/**
  * One-line summary of a config file for the list screen. Structurally identical
  * to ConfigSummary in app/lib/contract.ts (the route returns it verbatim); it is
  * duplicated here so backend/services stays under the root tsconfig without importing app/.
@@ -45,8 +75,9 @@ export function promptSetHash(texts: string[]): string {
   return `v-${hex.slice(0, 8)}`;
 }
 
-/** Filename (minus .json) → on-disk path. */
+/** Filename (minus .json) → on-disk path. Guards against traversal first. */
 function configPath(name: string, dir: string): string {
+  assertValidConfigName(name);
   return join(dir, `${name}.json`);
 }
 

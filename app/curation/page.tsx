@@ -9,13 +9,12 @@ import {
   API,
   type CurationPromoteResponse,
   type CurationResponse,
-  type OutageResponse,
-  type RenderResponse,
   ROUTES,
 } from "../lib/contract";
 import { sendJson, useJson, useSelectedConfig } from "../lib/client";
 import ConfigPicker from "../components/ConfigPicker";
-import { ErrorNote, Loading, OutagePanel, Section } from "../components/index";
+import { ErrorNote, Loading, Section } from "../components/index";
+import { RenderButton } from "../components/RenderButton";
 import { count } from "../lib/format";
 
 export default function CurationPage() {
@@ -26,9 +25,16 @@ export default function CurationPage() {
   const candidates = data?.candidates ?? [];
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
-  // Reset the selection whenever the candidate list changes.
+  // Hide 1-mention candidates to cut extractor noise. Defaults ON only when the
+  // list is long enough (~20) that the noise is worth hiding by default.
+  const [hideSingles, setHideSingles] = useState(false);
+  const singleCount = candidates.filter((c) => c.count === 1).length;
+  const visible = hideSingles ? candidates.filter((c) => c.count > 1) : candidates;
+
+  // Reset the selection + toggle default whenever the candidate list changes.
   useEffect(() => {
     setPicked(new Set());
+    setHideSingles((data?.candidates?.length ?? 0) > 20);
   }, [data]);
 
   const [promoting, setPromoting] = useState(false);
@@ -62,38 +68,6 @@ export default function CurationPage() {
     reload();
   }
 
-  // Free re-render after curation.
-  const [renderState, setRenderState] = useState<
-    | { status: "idle" }
-    | { status: "sending" }
-    | { status: "done"; reportFile: string }
-    | { status: "outage"; providers: string[]; completion: OutageResponse["completion"] }
-    | { status: "error"; message: string }
-  >({ status: "idle" });
-
-  async function reRender(acknowledgeOutage = false) {
-    if (!selected) return;
-    setRenderState({ status: "sending" });
-    const res = await sendJson<RenderResponse>(API.render, "POST", {
-      configName: selected,
-      acknowledgeOutage,
-    });
-    if (res.ok && res.data) {
-      setRenderState({ status: "done", reportFile: res.data.reportFile });
-      return;
-    }
-    if (res.status === 409) {
-      const body = res.errorBody as OutageResponse | null;
-      setRenderState({
-        status: "outage",
-        providers: body?.outageProviders ?? [],
-        completion: body?.completion ?? [],
-      });
-      return;
-    }
-    setRenderState({ status: "error", message: res.error ?? "render failed" });
-  }
-
   return (
     <>
       <div className="page-header">
@@ -119,7 +93,7 @@ export default function CurationPage() {
                 <button
                   type="button"
                   className="btn btn-sm"
-                  onClick={() => setPicked(new Set(candidates.map((c) => c.name)))}
+                  onClick={() => setPicked(new Set(visible.map((c) => c.name)))}
                 >
                   Select all
                 </button>
@@ -140,17 +114,65 @@ export default function CurationPage() {
             </div>
           ) : (
             <>
+              {singleCount > 0 && (
+                <label
+                  className="small muted"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={hideSingles}
+                    onChange={() => setHideSingles((v) => !v)}
+                  />
+                  Hide 1-mention candidates ({count(singleCount)} hidden)
+                </label>
+              )}
               <div>
-                {candidates.map((c) => (
-                  <label className="check-row" key={c.name}>
-                    <input
-                      type="checkbox"
-                      checked={picked.has(c.name)}
-                      onChange={() => toggle(c.name)}
-                    />
-                    <span className="count">{count(c.count)}×</span>
-                    <span>{c.name}</span>
-                  </label>
+                {visible.map((c) => (
+                  <div
+                    key={c.name}
+                    style={{
+                      borderBottom: "1px solid var(--border)",
+                      padding: "0.5rem 0.2rem",
+                    }}
+                  >
+                    <label
+                      className="check-row"
+                      style={{ borderBottom: "none", padding: 0, flexWrap: "wrap" }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={picked.has(c.name)}
+                        onChange={() => toggle(c.name)}
+                      />
+                      <span className="count">{count(c.count)}×</span>
+                      <span style={{ fontWeight: 600 }}>{c.name}</span>
+                      {c.providers.map((p) => (
+                        <span key={p} className="badge badge-version">
+                          {p}
+                        </span>
+                      ))}
+                      {c.promptIds.length > 0 && (
+                        <span className="small muted">
+                          in {count(c.promptIds.length)}{" "}
+                          {c.promptIds.length === 1 ? "prompt" : "prompts"}
+                        </span>
+                      )}
+                    </label>
+                    {c.exampleSnippet && (
+                      <p
+                        className="small muted"
+                        style={{ margin: "0.3rem 0 0", paddingLeft: "1.9rem" }}
+                      >
+                        “{c.exampleSnippet}”
+                      </p>
+                    )}
+                  </div>
                 ))}
               </div>
 
@@ -178,36 +200,17 @@ export default function CurationPage() {
             <strong>{count(result.competitors)}</strong> competitors.
           </div>
 
-          {renderState.status === "outage" && (
-            <OutagePanel
-              outageProviders={renderState.providers}
-              completion={renderState.completion}
-              onRenderAnyway={() => reRender(true)}
-              onDismiss={() => setRenderState({ status: "idle" })}
-            />
-          )}
-          {renderState.status === "error" && (
-            <ErrorNote message={`Re-render failed: ${renderState.message}`} />
-          )}
-          {renderState.status === "done" && (
-            <div className="info-note">
-              Re-rendered <span className="mono">{renderState.reportFile}</span>.{" "}
-              <a href={ROUTES.reports}>View it on the Reports page →</a>
-            </div>
-          )}
-
-          {renderState.status !== "outage" && (
-            <div className="toolbar">
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => reRender()}
-                disabled={renderState.status === "sending"}
-              >
-                {renderState.status === "sending" ? "Rendering…" : "Re-render report (free)"}
-              </button>
-            </div>
-          )}
+          <RenderButton
+            configName={selected}
+            label="Re-render report (free)"
+            errorLabel="Re-render failed"
+            renderDone={(reportFile) => (
+              <div className="info-note">
+                Re-rendered <span className="mono">{reportFile}</span>.{" "}
+                <a href={ROUTES.reports}>View it on the Reports page →</a>
+              </div>
+            )}
+          />
           <p className="small muted">
             Re-rendering reuses existing results — no new model calls, no cost.
           </p>

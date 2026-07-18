@@ -108,6 +108,31 @@ function makeAgg(overrides: Partial<AggregateResult> = {}): AggregateResult {
     totalPlanned: 30,
     totalCompleted: 28,
     generatedAt: "2026-07-01T09:00:00.000Z",
+    shareOfVoice: { clientMentions: 14, totalMentions: 35, share: 14 / 35 },
+    sources: {
+      completedRuns: 28,
+      rows: [
+        { domain: "byrdie.com", runsCiting: 20, clientCited: false },
+        { domain: "allure.com", runsCiting: 14, clientCited: false },
+        { domain: "tikit.com", runsCiting: 5, clientCited: true },
+      ],
+    },
+    pullQuote: {
+      text: "TIkit is a strong option for mid-size brands.",
+      provider: "openai",
+      brand: "TIkit",
+      isClient: true,
+    },
+    promptBreakdown: [
+      {
+        promptText: "What are the best influencer agencies in the UK?",
+        cells: [
+          { provider: "openai", samples: 5, mentioned: 3 },
+          { provider: "anthropic", samples: 4, mentioned: 0 },
+          { provider: "perplexity", samples: 5, mentioned: 2 },
+        ],
+      },
+    ],
     ...overrides,
   };
 }
@@ -271,7 +296,10 @@ describe("renderReport — empty competitors and empty gaps", () => {
       "No citation gaps were identified during this period.",
     );
     expect(html).not.toContain('<div class="bar-row');
-    expect(html).not.toContain("<table");
+    // The competitor bar chart and the citation-gap table both collapse to
+    // their empty states. "Competitors cited there" is the gap table's unique
+    // header; R4's source/appendix tables are unaffected and may remain.
+    expect(html).not.toContain("Competitors cited there");
   });
 
   it("contains neither undefined nor NaN", () => {
@@ -320,6 +348,182 @@ describe("renderReport — model with zero completed runs", () => {
   });
 });
 
+describe("renderReport — R4 share-of-voice hero line", () => {
+  it("renders the SoV line with the total mentions and rounded share", () => {
+    const html = renderReport(makeAgg(), makeConfig());
+    // 14 / 35 = 40%
+    expect(html).toContain("sov-line");
+    expect(html).toContain("Of <strong>35</strong> brand mentions AI made in your category");
+    expect(html).toContain("you received <strong>40%</strong>");
+    expectClean(html);
+  });
+
+  it("zero-mention: SoV is 0% (never NaN) with real totals present", () => {
+    const html = renderReport(
+      makeAgg({ shareOfVoice: { clientMentions: 0, totalMentions: 39, share: 0 } }),
+      makeConfig(),
+    );
+    expect(html).toContain("Of <strong>39</strong> brand mentions");
+    expect(html).toContain("you received <strong>0%</strong>");
+    expectClean(html);
+  });
+
+  it("empty-state when no brand is named anywhere (totalMentions 0)", () => {
+    const html = renderReport(
+      makeAgg({ shareOfVoice: { clientMentions: 0, totalMentions: 0, share: 0 } }),
+      makeConfig(),
+    );
+    expect(html).toContain("AI named no brands in your category during this period");
+    expect(html).not.toContain("brand mentions AI made in your category");
+    expectClean(html);
+  });
+
+  it("omits the SoV line entirely for old-shape aggregates without the field", () => {
+    const html = renderReport(makeAgg({ shareOfVoice: undefined }), makeConfig());
+    expect(html).not.toContain('<p class="sov-line');
+    expectClean(html);
+  });
+});
+
+describe("renderReport — R4 source leaderboard", () => {
+  const html = renderReport(makeAgg(), makeConfig());
+
+  it("renders the section with each domain and its % of runs", () => {
+    expect(html).toContain("Where AI systems get their information");
+    expect(html).toContain("byrdie.com");
+    // 20 of 28 = 71%
+    expect(html).toContain("71% <span class=\"source-runs\">(20 of 28 runs)</span>");
+    // 14 of 28 = 50%
+    expect(html).toContain("50% <span class=\"source-runs\">(14 of 28 runs)</span>");
+  });
+
+  it("tints the client-cited row with the accent (source-you)", () => {
+    expect(html).toContain("source-you");
+    expect(html).toContain("tikit.com");
+    // client-cited row carries the (you) tag
+    const youIdx = html.indexOf("source-you");
+    expect(youIdx).toBeGreaterThan(-1);
+  });
+
+  it("empty-state when no sources were cited", () => {
+    const empty = renderReport(
+      makeAgg({ sources: { completedRuns: 10, rows: [] } }),
+      makeConfig(),
+    );
+    expect(empty).toContain("No sources were cited in AI answers during this period.");
+    expect(empty).not.toContain("source-row");
+    expectClean(empty);
+  });
+
+  it("omits nothing but shows empty-state for old-shape aggregates without the field", () => {
+    const old = renderReport(makeAgg({ sources: undefined }), makeConfig());
+    expect(old).toContain("No sources were cited in AI answers during this period.");
+    expectClean(old);
+  });
+});
+
+describe("renderReport — R4 pull-quote", () => {
+  it("renders a blockquote with client attribution when the client is quoted", () => {
+    const html = renderReport(makeAgg(), makeConfig());
+    expect(html).toContain("<blockquote>");
+    expect(html).toContain("TIkit is a strong option for mid-size brands.");
+    expect(html).toContain("ChatGPT on TIkit");
+  });
+
+  it("falls back to the top competitor with a 'not named' attribution", () => {
+    const html = renderReport(
+      makeAgg({
+        pullQuote: {
+          text: "Socially Powerful is a global influencer marketing agency.",
+          provider: "anthropic",
+          brand: "Socially Powerful",
+          isClient: false,
+        },
+      }),
+      makeConfig(),
+    );
+    expect(html).toContain("Socially Powerful is a global influencer marketing agency.");
+    expect(html).toContain("Claude on Socially Powerful");
+    expect(html).toContain("TIkit was not named");
+  });
+
+  it("htmlEscapes the pull-quote text", () => {
+    const html = renderReport(
+      makeAgg({
+        pullQuote: {
+          text: 'TIkit <b>"wins"</b> & leads',
+          provider: "openai",
+          brand: "TIkit",
+          isClient: true,
+        },
+      }),
+      makeConfig(),
+    );
+    expect(html).toContain("TIkit &lt;b&gt;&quot;wins&quot;&lt;/b&gt; &amp; leads");
+    expect(html).not.toContain("<b>\"wins\"</b>");
+    expectClean(html);
+  });
+
+  it("omits the pull-quote section when there is no quote (old-shape / no brand named)", () => {
+    const html = renderReport(makeAgg({ pullQuote: undefined }), makeConfig());
+    expect(html).not.toContain("<blockquote>");
+    expect(html).not.toContain('class="pull-quote"');
+    expectClean(html);
+  });
+});
+
+describe("renderReport — R4 per-prompt appendix", () => {
+  const html = renderReport(makeAgg(), makeConfig());
+
+  it("renders a row per prompt with per-provider x-of-n cells", () => {
+    expect(html).toContain("Prompt-by-prompt breakdown");
+    expect(html).toContain("What are the best influencer agencies in the UK?");
+    expect(html).toContain("3 of 5");
+    expect(html).toContain("2 of 5");
+  });
+
+  it("tints losing (0-mention) cells as a miss", () => {
+    expect(html).toContain("appendix-miss");
+    expect(html).toContain(">0 of 4</td>");
+  });
+
+  it("empty-state when no prompt had enough samples", () => {
+    const empty = renderReport(makeAgg({ promptBreakdown: [] }), makeConfig());
+    expect(empty).toContain("No prompts had enough completed samples to break down");
+    expectClean(empty);
+  });
+
+  it("shows empty-state for old-shape aggregates without the field", () => {
+    const old = renderReport(makeAgg({ promptBreakdown: undefined }), makeConfig());
+    expect(old).toContain("No prompts had enough completed samples to break down");
+    expectClean(old);
+  });
+});
+
+describe("renderReport — R4 trend polish", () => {
+  const html = renderReport(makeAgg(), makeConfig());
+
+  it("draws an accent area fill and y-axis gridline labels", () => {
+    expect(html).toContain('class="trend-area"');
+    expect(html).toContain('class="trend-grid"');
+    expect(html).toContain('class="trend-axis"');
+    // top gridline label for maxRate 0.5 * 1.25 = 0.625 → 63%
+    expect(html).toContain(">63%</text>");
+    expect(html).toContain(">0%</text>");
+  });
+
+  it("labels every point and keeps the >=2-point gate", () => {
+    expect(html).toContain(">31%</text>");
+    expect(html).toContain(">50%</text>");
+    const single = renderReport(
+      makeAgg({ trend: [{ date: "2026-06-30", promptSetVersion: "v1.3.0", overallMentionRate: 0.4 }] }),
+      makeConfig(),
+    );
+    expect(single).not.toContain("<svg");
+    expectClean(single);
+  });
+});
+
 describe("renderReport — escaping", () => {
   const hostile = "<script>alert(1)</script>";
   const html = renderReport(
@@ -336,6 +540,14 @@ describe("renderReport — escaping", () => {
           competitorsCited: [hostile],
           clientCited: false,
         },
+      ],
+      sources: {
+        completedRuns: 10,
+        rows: [{ domain: '"><img src=x onerror=alert(1)>', runsCiting: 4, clientCited: false }],
+      },
+      pullQuote: { text: hostile, provider: "openai", brand: hostile, isClient: false },
+      promptBreakdown: [
+        { promptText: hostile, cells: [{ provider: "openai", samples: 5, mentioned: 0 }] },
       ],
     }),
     makeConfig({ client: makeBrand({ name: hostile }) }),
@@ -381,5 +593,28 @@ describe("renderReport — white-label header", () => {
   it("uses the accent color in the stylesheet", () => {
     const html = renderReport(makeAgg(), makeConfig());
     expect(html).toContain("--accent: #b4552d");
+  });
+
+  it("passes a 3-digit hex accent through unchanged", () => {
+    const html = renderReport(
+      makeAgg(),
+      makeConfig({ whiteLabel: { agencyName: "Northwind Digital", accentColor: "#abc" } }),
+    );
+    expect(html).toContain("--accent: #abc;");
+  });
+
+  it("neutralizes a CSS-injection accentColor, falling back to the safe default", () => {
+    const payload = "red;} body{display:none} :root{--x:";
+    const html = renderReport(
+      makeAgg(),
+      makeConfig({ whiteLabel: { agencyName: "Northwind Digital", accentColor: payload } }),
+    );
+    // The raw payload must NOT reach the CSS context, in any escaped form.
+    expect(html).not.toContain(payload);
+    expect(html).not.toContain("body{display:none}");
+    expect(html).not.toContain("display:none");
+    // The safe default accent is used instead.
+    expect(html).toContain("--accent: #1a56db;");
+    expectClean(html);
   });
 });

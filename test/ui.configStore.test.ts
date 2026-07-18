@@ -3,6 +3,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  InvalidConfigNameError,
+  assertValidConfigName,
+  isValidConfigName,
   listConfigs,
   loadConfig,
   promptSetHash,
@@ -16,6 +19,63 @@ beforeEach(() => {
 });
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
+});
+
+describe("isValidConfigName (path-traversal guard)", () => {
+  it("accepts real config names, including dotted ones", () => {
+    for (const ok of ["tikit", "full.example", "cheap.example", "a", "A_b-1", "x.y.z"]) {
+      expect(isValidConfigName(ok)).toBe(true);
+    }
+  });
+
+  it("rejects traversal, separators, and empty", () => {
+    for (const bad of [
+      "..",
+      "../etc",
+      "..\\etc",
+      "a/b",
+      "a\\b",
+      "foo/../bar",
+      "a..b", // any name containing ".." is rejected, even mid-string
+      "",
+      " ",
+      "with space",
+      "name.json/../x",
+      "évil", // outside the ASCII allowlist
+    ]) {
+      expect(isValidConfigName(bad)).toBe(false);
+    }
+  });
+
+  it("assertValidConfigName throws InvalidConfigNameError on a bad name (no path in message)", () => {
+    expect(() => assertValidConfigName("../secret")).toThrow(InvalidConfigNameError);
+    try {
+      assertValidConfigName("../secret");
+    } catch (err) {
+      expect((err as Error).message).toBe("invalid config name");
+      expect((err as Error).message).not.toContain("../");
+    }
+    // A valid name does not throw.
+    expect(() => assertValidConfigName("full.example")).not.toThrow();
+  });
+});
+
+describe("loadConfig / saveConfig reject unsafe names before any fs access", () => {
+  it("loadConfig throws InvalidConfigNameError on a traversal name", () => {
+    expect(() => loadConfig("../../etc/passwd", dir)).toThrow(InvalidConfigNameError);
+  });
+
+  it("saveConfig throws InvalidConfigNameError on a traversal name", () => {
+    expect(() => saveConfig("../evil", makeConfig({ prompts: ["p"] }), dir)).toThrow(
+      InvalidConfigNameError,
+    );
+  });
+
+  it("a valid dotted name still round-trips (behavior-preserving)", () => {
+    saveConfig("full.example", makeConfig({ prompts: ["p one"] }), dir);
+    expect(loadConfig("full.example", dir).promptSet.prompts[0]!.text).toBe("p one");
+    expect(listConfigs(dir).map((s) => s.name)).toContain("full.example");
+  });
 });
 
 describe("promptSetHash", () => {

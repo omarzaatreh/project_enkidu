@@ -6,20 +6,13 @@
  */
 import type { ReactNode } from "react";
 import { ROUTES } from "./lib/contract";
+import Nav from "./components/Nav";
 import "./globals.css";
 
 export const metadata = {
   title: "enkidu cockpit",
   description: "Founder-only local control panel for the AI Visibility Report pipeline",
 };
-
-const NAV = [
-  { href: ROUTES.clients, label: "Clients" },
-  { href: ROUTES.run, label: "Run" },
-  { href: ROUTES.prompts, label: "Prompts" },
-  { href: ROUTES.curation, label: "Curation" },
-  { href: ROUTES.reports, label: "Reports" },
-];
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -29,11 +22,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <span className="brand">
             <a href={ROUTES.home}>enkidu cockpit</a>
           </span>
-          {NAV.map((item) => (
-            <a key={item.href} href={item.href}>
-              {item.label}
-            </a>
-          ))}
+          {/* R9: nav links live in a tiny client child so the active route can be
+              highlighted (usePathname). The layout itself stays a server component. */}
+          <Nav />
         </nav>
         <main>{children}</main>
       </body>

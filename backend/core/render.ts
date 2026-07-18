@@ -65,8 +65,21 @@ function renderModelCard(stats: ModelStats): string {
     </div>`;
 }
 
+/** (R4.1) Overall share-of-voice hero line under the stat cards. */
+function renderShareOfVoiceLine(agg: AggregateResult): string {
+  const sov = agg.shareOfVoice;
+  if (sov === undefined) return "";
+  if (sov.totalMentions === 0) {
+    return `\n  <p class="sov-line sov-empty">AI named no brands in your category during this period &mdash; there is no share of voice to report yet.</p>`;
+  }
+  const share = Math.round(sov.share * 100);
+  const noun = sov.totalMentions === 1 ? "brand mention" : "brand mentions";
+  return `\n  <p class="sov-line">Of <strong>${sov.totalMentions}</strong> ${noun} AI made in your category, you received <strong>${share}%</strong>.</p>`;
+}
+
 function renderHero(agg: AggregateResult): string {
   const cards = agg.perModel.map(renderModelCard).join("\n    ");
+  const sovLine = renderShareOfVoiceLine(agg);
   const zeroMention =
     agg.perModel.length > 0 && agg.perModel.every((m) => m.mentionRuns === 0);
   const framing = zeroMention
@@ -75,7 +88,117 @@ function renderHero(agg: AggregateResult): string {
   return `<section class="hero">
   <div class="stat-row">
     ${cards}
-  </div>${framing}
+  </div>${sovLine}${framing}
+</section>`;
+}
+
+/** (R4.3) One verbatim editorial pull-quote with provider attribution. */
+function renderPullQuote(agg: AggregateResult): string {
+  const pq = agg.pullQuote;
+  // Omit entirely when no brand was named anywhere (mirrors the trend block's
+  // omit-when-insufficient empty state).
+  if (pq === undefined) return "";
+  const provider = PROVIDER_DISPLAY_NAMES[pq.provider];
+  const attribution = pq.isClient
+    ? `${htmlEscape(provider)} on ${htmlEscape(agg.client.name)}`
+    : `${htmlEscape(provider)} on ${htmlEscape(pq.brand)} &mdash; ${htmlEscape(agg.client.name)} was not named`;
+  return `<section class="pull-quote">
+  <figure>
+    <blockquote>${htmlEscape(pq.text)}</blockquote>
+    <figcaption>&mdash; ${attribution}</figcaption>
+  </figure>
+</section>`;
+}
+
+/** (R4.2) Source leaderboard — the actionable GEO target list, % of runs. */
+function renderSources(agg: AggregateResult): string {
+  const heading = `<h2>Where AI systems get their information</h2>`;
+  const sources = agg.sources;
+  if (sources === undefined || sources.rows.length === 0) {
+    return `<section class="sources">
+  ${heading}
+  <p class="empty-state">No sources were cited in AI answers during this period.</p>
+</section>`;
+  }
+  const denom = sources.completedRuns;
+  const rows = sources.rows
+    .map((r) => {
+      const rowClass = r.clientCited ? "source-row source-you" : "source-row";
+      const youTag = r.clientCited ? ` <span class="you-tag">(you)</span>` : "";
+      const width = denom === 0 ? "0" : ((r.runsCiting / denom) * 100).toFixed(1);
+      return `<tr class="${rowClass}">
+        <td><span class="source-domain">${htmlEscape(r.domain)}</span>${youTag}</td>
+        <td class="source-share">
+          <div class="source-bar"><div class="source-fill" style="width:${width}%"></div></div>
+          <span class="source-pct">${pct(r.runsCiting, denom)} <span class="source-runs">(${r.runsCiting} of ${denom} runs)</span></span>
+        </td>
+      </tr>`;
+    })
+    .join("\n      ");
+  return `<section class="sources">
+  ${heading}
+  <p class="section-lede">The pages AI cites most when answering your category&rsquo;s buyer questions &mdash; your priority targets for coverage.</p>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>Source</th><th>Cited in</th></tr>
+      </thead>
+      <tbody>
+      ${rows}
+      </tbody>
+    </table>
+  </div>
+</section>`;
+}
+
+/** (R4.4) Per-prompt appendix: prompt × per-provider client mentions. */
+function renderAppendix(agg: AggregateResult, config: RunConfig): string {
+  const heading = `<h2>Prompt-by-prompt breakdown</h2>`;
+  const rows = agg.promptBreakdown;
+  if (rows === undefined || rows.length === 0) {
+    return `<section class="appendix">
+  ${heading}
+  <p class="empty-state">No prompts had enough completed samples to break down during this period.</p>
+</section>`;
+  }
+  const providerOrder = (Object.keys(config.models) as Provider[]).filter((p) =>
+    rows.some((row) => row.cells.some((c) => c.provider === p)),
+  );
+  const headCells = providerOrder
+    .map((p) => `<th class="appendix-num">${htmlEscape(PROVIDER_DISPLAY_NAMES[p])}</th>`)
+    .join("");
+  const bodyRows = rows
+    .map((row) => {
+      const cells = providerOrder
+        .map((p) => {
+          const cell = row.cells.find((c) => c.provider === p);
+          if (cell === undefined) {
+            return `<td class="appendix-num appendix-na">&mdash;</td>`;
+          }
+          const cls =
+            cell.mentioned === 0 ? "appendix-num appendix-miss" : "appendix-num";
+          return `<td class="${cls}">${cell.mentioned} of ${cell.samples}</td>`;
+        })
+        .join("");
+      return `<tr>
+        <td class="appendix-prompt">${htmlEscape(row.promptText)}</td>
+        ${cells}
+      </tr>`;
+    })
+    .join("\n      ");
+  return `<section class="appendix">
+  ${heading}
+  <p class="section-lede">Where you appear &mdash; and where you lose &mdash; question by question. Each cell is the number of samples that named ${htmlEscape(agg.client.name)}.</p>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>Buyer question</th>${headCells}</tr>
+      </thead>
+      <tbody>
+      ${bodyRows}
+      </tbody>
+    </table>
+  </div>
 </section>`;
 }
 
@@ -157,10 +280,12 @@ function renderCitationGaps(agg: AggregateResult): string {
 }
 
 function renderTrend(trend: TrendPoint[]): string {
+  // KEEP the ≥2-point render gate — a single point is not a trend.
   if (trend.length < 2) return "";
   const width = 640;
-  const height = 180;
-  const padX = 24;
+  const height = 200;
+  const padLeft = 40;
+  const padRight = 24;
   const padTop = 28;
   const padBottom = 36;
   const first = trend[0]!;
@@ -169,31 +294,55 @@ function renderTrend(trend: TrendPoint[]): string {
   const maxRate = Math.max(...rates);
   const yMax = maxRate > 0 ? maxRate * 1.25 : 1;
   const x = (i: number): number =>
-    padX + (i * (width - padX * 2)) / (trend.length - 1);
+    padLeft + (i * (width - padLeft - padRight)) / (trend.length - 1);
   const y = (rate: number): number =>
     padTop + (height - padTop - padBottom) * (1 - rate / yMax);
-  const points = trend
+  const baselineY = height - padBottom;
+
+  // Y-axis: 3 evenly spaced gridlines (0, mid, top) with % labels.
+  const gridFracs = [0, 0.5, 1];
+  const gridlines = gridFracs
+    .map((frac) => {
+      const value = yMax * frac;
+      const gy = y(value).toFixed(1);
+      const label = `${Math.round(value * 100)}%`;
+      return `<line x1="${padLeft}" y1="${gy}" x2="${width - padRight}" y2="${gy}" class="trend-grid"/>
+    <text x="${padLeft - 8}" y="${gy}" text-anchor="end" dominant-baseline="middle" class="trend-axis">${label}</text>`;
+    })
+    .join("\n    ");
+
+  const linePoints = trend
     .map((t, i) => `${x(i).toFixed(1)},${y(t.overallMentionRate).toFixed(1)}`)
     .join(" ");
+  // Soft area fill: the line, closed down to the baseline at both ends.
+  const areaPoints = `${x(0).toFixed(1)},${baselineY.toFixed(1)} ${linePoints} ${x(trend.length - 1).toFixed(1)},${baselineY.toFixed(1)}`;
+
   const dots = trend
     .map(
       (t, i) =>
         `<circle cx="${x(i).toFixed(1)}" cy="${y(t.overallMentionRate).toFixed(1)}" r="3.5" class="trend-dot"/>`,
     )
     .join("");
-  const firstPctLabel = `<text x="${x(0).toFixed(1)}" y="${(y(first.overallMentionRate) - 10).toFixed(1)}" text-anchor="start" class="trend-value">${Math.round(first.overallMentionRate * 100)}%</text>`;
-  const lastPctLabel = `<text x="${x(trend.length - 1).toFixed(1)}" y="${(y(last.overallMentionRate) - 10).toFixed(1)}" text-anchor="end" class="trend-value">${Math.round(last.overallMentionRate * 100)}%</text>`;
-  const baselineY = (height - padBottom).toFixed(1);
+
+  // A label on every point (rarely > 12). Edge points anchor inward so they
+  // never clip the chart frame.
+  const valueLabels = trend
+    .map((t, i) => {
+      const anchor = i === 0 ? "start" : i === trend.length - 1 ? "end" : "middle";
+      return `<text x="${x(i).toFixed(1)}" y="${(y(t.overallMentionRate) - 10).toFixed(1)}" text-anchor="${anchor}" class="trend-value">${Math.round(t.overallMentionRate * 100)}%</text>`;
+    })
+    .join("");
+
   return `<section class="trend">
   <h2>Mention rate over time</h2>
   <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Overall mention rate over time" preserveAspectRatio="xMidYMid meet">
-    <line x1="${padX}" y1="${baselineY}" x2="${width - padX}" y2="${baselineY}" class="trend-baseline"/>
-    <polyline points="${points}" class="trend-line"/>
+    ${gridlines}
+    <polygon points="${areaPoints}" class="trend-area"/>
+    <polyline points="${linePoints}" class="trend-line"/>
     ${dots}
-    ${firstPctLabel}
-    ${lastPctLabel}
-    <text x="${padX}" y="${height - 10}" text-anchor="start" class="trend-date">${htmlEscape(first.date)}</text>
-    <text x="${width - padX}" y="${height - 10}" text-anchor="end" class="trend-date">${htmlEscape(last.date)}</text>
+    ${valueLabels}
+    <text x="${padLeft}" y="${height - 10}" text-anchor="start" class="trend-date">${htmlEscape(first.date)}</text>
+    <text x="${width - padRight}" y="${height - 10}" text-anchor="end" class="trend-date">${htmlEscape(last.date)}</text>
   </svg>
 </section>`;
 }
@@ -226,8 +375,30 @@ function renderMethodology(agg: AggregateResult, config: RunConfig): string {
 
 // ---------- Styles ----------
 
+/** The report's fallback accent — a safe hex used when accentColor is not valid. */
+export const DEFAULT_ACCENT_COLOR = "#1a56db";
+
+/**
+ * Coerce a config accentColor to a hex safe to interpolate into a CSS value.
+ * accentColor is free text (hand-edited/CLI configs reach here too) and lands in
+ * a CSS context where htmlEscape does NOT neutralize `;`/`{`/`}` — so a payload
+ * like `red;} body{display:none}` could inject arbitrary CSS into the paid
+ * report. Only a 3- or 6-digit hex color is allowed through; anything else falls
+ * back to DEFAULT_ACCENT_COLOR. Runs on EVERY render path (CLI + cockpit).
+ */
+export function isValidAccentColor(accentColor: unknown): accentColor is string {
+  return (
+    typeof accentColor === "string" &&
+    (/^#[0-9a-fA-F]{6}$/.test(accentColor) || /^#[0-9a-fA-F]{3}$/.test(accentColor))
+  );
+}
+
+export function safeAccentColor(accentColor: string): string {
+  return isValidAccentColor(accentColor) ? accentColor : DEFAULT_ACCENT_COLOR;
+}
+
 function renderStyles(accentColor: string): string {
-  const accent = htmlEscape(accentColor);
+  const accent = safeAccentColor(accentColor);
   return `<style>
     :root { --accent: ${accent}; --ink: #1c1f23; --muted: #6b7280; --hairline: #e5e2db; --paper: #fdfdfb; --card: #ffffff; --tint: #fdf6f0; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -289,11 +460,42 @@ function renderStyles(accentColor: string): string {
 
     /* Trend */
     .trend svg { width: 100%; height: auto; display: block; }
-    .trend-line { fill: none; stroke: var(--ink); stroke-width: 2; }
-    .trend-dot { fill: var(--ink); }
-    .trend-baseline { stroke: var(--hairline); stroke-width: 1; }
-    .trend-value { font-size: 13px; fill: var(--ink); }
+    .trend-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+    .trend-area { fill: var(--accent); fill-opacity: 0.08; stroke: none; }
+    .trend-dot { fill: var(--accent); }
+    .trend-grid { stroke: var(--hairline); stroke-width: 1; }
+    .trend-axis { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
+    .trend-value { font-size: 13px; fill: var(--ink); font-variant-numeric: tabular-nums; }
     .trend-date { font-size: 12px; fill: var(--muted); }
+
+    /* Share-of-voice hero line */
+    .sov-line { margin-top: 24px; font-size: 18px; max-width: 62ch; }
+    .sov-line strong { color: var(--accent); font-weight: 700; }
+    .sov-empty { color: var(--muted); }
+
+    /* Section lede */
+    .section-lede { font-size: 14px; color: var(--muted); margin-top: -8px; margin-bottom: 18px; max-width: 68ch; }
+
+    /* Pull quote */
+    .pull-quote figure { border-left: 3px solid var(--accent); padding: 4px 0 4px 22px; margin: 0; }
+    .pull-quote blockquote { font-family: Georgia, "Times New Roman", serif; font-size: 22px; line-height: 1.4; color: var(--ink); }
+    .pull-quote figcaption { margin-top: 12px; font-size: 13px; color: var(--muted); letter-spacing: 0.02em; }
+
+    /* Source leaderboard */
+    .source-domain { font-weight: 500; overflow-wrap: anywhere; }
+    .source-share { width: 55%; }
+    .source-bar { background: transparent; }
+    .source-fill { height: 16px; background: #c9c4ba; border-radius: 2px; min-width: 2px; }
+    .source-you td { background: var(--tint); }
+    .source-you .source-fill { background: var(--accent); }
+    .source-pct { display: inline-block; margin-top: 4px; font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; }
+    .source-runs { color: var(--muted); }
+
+    /* Appendix */
+    .appendix-prompt { font-size: 13px; max-width: 42ch; }
+    .appendix-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .appendix-na { color: var(--muted); }
+    .appendix-miss { background: var(--tint); color: #a03d2e; font-weight: 600; }
 
     /* Empty states */
     .empty-state { color: var(--muted); font-size: 15px; }
@@ -313,7 +515,7 @@ function renderStyles(accentColor: string): string {
     @media print {
       body { background: #ffffff; border-top-color: var(--accent); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .page { max-width: none; padding: 0; }
-      section, footer, .stat-card, .bar-row, tr { break-inside: avoid; page-break-inside: avoid; }
+      section, footer, .stat-card, .bar-row, tr, figure, blockquote { break-inside: avoid; page-break-inside: avoid; }
       .table-scroll { overflow-x: visible; }
       a { color: inherit; text-decoration: none; }
     }
@@ -326,9 +528,12 @@ export function renderReport(agg: AggregateResult, config: RunConfig): string {
   const parts = [
     renderHeader(config),
     renderHero(agg),
+    renderPullQuote(agg),
     renderCompetitors(agg),
+    renderSources(agg),
     renderCitationGaps(agg),
     renderTrend(agg.trend),
+    renderAppendix(agg, config),
     renderMethodology(agg, config),
   ].filter((p) => p.length > 0);
 

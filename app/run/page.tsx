@@ -13,21 +13,37 @@ import {
   API,
   type ActiveRunResponse,
   type EstimateResponse,
-  type OutageResponse,
+  type FailuresResponse,
   type ProgressEvent,
   type Provider,
+  type ProviderProgress,
   type PutConfigResponse,
-  type RenderResponse,
   type RunConfig,
+  type RunFailure,
   ROUTES,
+  runsFailuresPath,
 } from "../lib/contract";
 import { sendJson, useJson, useSelectedConfig } from "../lib/client";
 import { PER_CALL_USD } from "../lib/pricing";
 import ConfigPicker from "../components/ConfigPicker";
-import { ErrorNote, Field, Loading, OutagePanel, Section } from "../components/index";
-import { count, pct, usd, when } from "../lib/format";
+import { ErrorNote, Field, Loading, Section } from "../components/index";
+import { RenderButton } from "../components/RenderButton";
+import { count, pct, todayLocalISO, usd, when } from "../lib/format";
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
+/**
+ * The exact slice of a config the Run page can edit (models, samples, and the
+ * report period). Serialized identically on load and on save so the dirty-check
+ * covers every editable field — editing a date marks the draft dirty just like
+ * toggling a provider does.
+ */
+const dirtyKey = (c: RunConfig): string =>
+  JSON.stringify({
+    models: c.models,
+    samples: c.samplesPerPrompt,
+    dateRange: c.dateRange,
+  });
 
 const PROVIDERS: { key: Provider; label: string; defaultModel: string }[] = [
   { key: "openai", label: "OpenAI", defaultModel: "gpt-5" },
@@ -38,7 +54,23 @@ const PROVIDERS: { key: Provider; label: string; defaultModel: string }[] = [
 interface ProgressState {
   generation?: { done: number; total: number; failed: number };
   extraction?: { done: number; total: number; failed: number };
+  /** Latest per-provider generation breakdown (R7); preserved across frames. */
+  byProvider?: ProviderProgress[];
   terminal?: { outageProviders: string[] };
+}
+
+/** Human label for a provider key, falling back to the raw key. */
+const PROVIDER_LABEL: Record<string, string> = {
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  perplexity: "Perplexity",
+};
+
+/** Elapsed milliseconds as m:ss (never negative). */
+function fmtElapsed(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(s / 60);
+  return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
 /** Client-side full-run preview so the founder never sees a blank estimate. */
@@ -72,13 +104,11 @@ export default function RunPage() {
   useEffect(() => {
     if (cfg) {
       setDraft(clone(cfg));
-      setOriginal(JSON.stringify({ models: cfg.models, samples: cfg.samplesPerPrompt }));
+      setOriginal(dirtyKey(cfg));
     }
   }, [cfg]);
 
-  const dirty =
-    draft !== null &&
-    JSON.stringify({ models: draft.models, samples: draft.samplesPerPrompt }) !== original;
+  const dirty = draft !== null && dirtyKey(draft) !== original;
 
   function patch(fn: (d: RunConfig) => void) {
     setDraft((prev) => {
@@ -102,19 +132,33 @@ export default function RunPage() {
     return () => clearInterval(id);
   }, [reloadActive]);
 
-  async function saveParams() {
-    if (!draft || !selected) return;
+  // Persist an explicit config via PUT. Defaults to the current draft, but the
+  // "Set to today" nudge passes its freshly-built `next` so the write does not
+  // depend on the async `setDraft` state having flushed.
+  async function saveParams(next: RunConfig | null = draft) {
+    if (!next || !selected) return;
     setSaving(true);
     setSaveError(null);
-    const res = await sendJson<PutConfigResponse>(API.config(selected), "PUT", draft);
+    const res = await sendJson<PutConfigResponse>(API.config(selected), "PUT", next);
     setSaving(false);
     if (!res.ok) {
       setSaveError(res.error);
       return;
     }
-    setOriginal(JSON.stringify({ models: draft.models, samples: draft.samplesPerPrompt }));
+    setOriginal(dirtyKey(next));
     reloadCfg();
     reloadEst();
+  }
+
+  // Atomic "Set to today": set dateRange.to AND persist it in one click, so
+  // render (which reads the SAVED config from disk) never picks up the stale
+  // date. Reuses saveParams against the explicit `next`, not the draft closure.
+  async function setToTodayAndSave() {
+    if (!draft) return;
+    const next = clone(draft);
+    next.dateRange.to = today;
+    setDraft(next);
+    await saveParams(next);
   }
 
   // --- Run trigger ---------------------------------------------------------
@@ -173,10 +217,19 @@ export default function RunPage() {
   const esRef = useRef<EventSource | null>(null);
   const doneRef = useRef(false);
 
+  // R7: elapsed-time clock + failure list, reset per run.
+  const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
+  const [terminalAtMs, setTerminalAtMs] = useState<number | null>(null);
+  const [nowTs, setNowTs] = useState(() => Date.now());
+  const [failures, setFailures] = useState<RunFailure[] | null>(null);
+
   useEffect(() => {
     if (!watchName) return;
     setProgress({});
     setStreamError(null);
+    setTerminalAtMs(null);
+    setStartedAtMs(null);
+    setFailures(null);
     doneRef.current = false;
 
     const es = new EventSource(API.runsProgressPath(watchName));
@@ -191,6 +244,7 @@ export default function RunPage() {
       }
       if (frame.phase === "done") {
         doneRef.current = true;
+        setTerminalAtMs(Date.now());
         setProgress((p) => ({ ...p, terminal: { outageProviders: frame.outageProviders } }));
         es.close();
         reloadActive();
@@ -198,11 +252,14 @@ export default function RunPage() {
         setProgress((p) => ({
           ...p,
           generation: { done: frame.done, total: frame.total, failed: frame.failed },
+          // Preserve the last known breakdown when a frame omits it (emitter ticks).
+          byProvider: frame.byProvider ?? p.byProvider,
         }));
       } else {
         setProgress((p) => ({
           ...p,
           extraction: { done: frame.done, total: frame.total, failed: frame.failed },
+          byProvider: frame.byProvider ?? p.byProvider,
         }));
       }
     };
@@ -219,40 +276,59 @@ export default function RunPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchName, runNonce]);
 
-  // --- Render --------------------------------------------------------------
-  const [renderState, setRenderState] = useState<
-    | { status: "idle" }
-    | { status: "sending" }
-    | { status: "done"; reportFile: string }
-    | { status: "outage"; providers: string[]; completion: OutageResponse["completion"] }
-    | { status: "error"; message: string }
-  >({ status: "idle" });
+  // R7: capture the run's start time from the active-run poll (the SSE stream
+  // doesn't carry it) so we can show elapsed time. Only while THIS config runs.
+  useEffect(() => {
+    if (runningThis && active?.startedAt) {
+      const ms = Date.parse(active.startedAt);
+      if (Number.isFinite(ms)) setStartedAtMs(ms);
+    }
+  }, [runningThis, active?.startedAt]);
 
-  async function doRender(acknowledgeOutage = false) {
-    if (!selected) return;
-    setRenderState({ status: "sending" });
-    const res = await sendJson<RenderResponse>(API.render, "POST", {
-      configName: selected,
-      acknowledgeOutage,
-    });
-    if (res.ok && res.data) {
-      setRenderState({ status: "done", reportFile: res.data.reportFile });
+  // R7: tick a 1s clock while the stream is live, for the elapsed readout. Stops
+  // (and the elapsed freezes at terminalAtMs) once the terminal frame lands.
+  const liveStreaming = !!watchName && !progress.terminal;
+  useEffect(() => {
+    if (!liveStreaming) return;
+    setNowTs(Date.now());
+    const id = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [liveStreaming]);
+
+  // R7: on the terminal frame, fetch the stored failure list when any generation
+  // failed. Zero failures → skip the request and render nothing.
+  useEffect(() => {
+    if (!progress.terminal || !watchName) return;
+    if ((progress.generation?.failed ?? 0) <= 0) {
+      setFailures([]);
       return;
     }
-    if (res.status === 409) {
-      const body = res.errorBody as OutageResponse | null;
-      setRenderState({
-        status: "outage",
-        providers: body?.outageProviders ?? [],
-        completion: body?.completion ?? [],
+    let cancelled = false;
+    fetch(runsFailuresPath(watchName))
+      .then((r) => (r.ok ? (r.json() as Promise<FailuresResponse>) : Promise.reject(new Error())))
+      .then((d) => {
+        if (!cancelled) setFailures(d.failures);
+      })
+      .catch(() => {
+        if (!cancelled) setFailures([]);
       });
-      return;
-    }
-    setRenderState({ status: "error", message: res.error ?? "render failed" });
-  }
+    return () => {
+      cancelled = true;
+    };
+  }, [progress.terminal, watchName, progress.generation?.failed]);
 
+  // --- Render ---------------------------------------------------------------
+  // The render state machine (trigger + outage handling + notes) now lives in
+  // the shared <RenderButton>. The Run page keeps only the R6 date nudge (which
+  // depends on setToTodayAndSave/draft) and the R7 "Review answers →" link, and
+  // feeds them to RenderButton through its beforeRender/actions slots.
   const preview = draft ? localEstimate(draft) : null;
   const streaming = !!watchName && !progress.terminal;
+  // Elapsed since the run's lock was acquired; freezes at the terminal frame.
+  const elapsedMs =
+    startedAtMs != null ? (terminalAtMs ?? nowTs) - startedAtMs : null;
+  // Plain local calendar date to compare against dateRange.to (also local).
+  const today = todayLocalISO();
 
   return (
     <>
@@ -342,11 +418,43 @@ export default function RunPage() {
             )}
           </Section>
 
+          <Section
+            title="Report period"
+            desc="Shown on the report header and used as the trend point's date. Does not affect the cost estimate."
+          >
+            <div className="row">
+              <Field label="From" hint="Start of the reporting window (report header only).">
+                <input
+                  type="date"
+                  value={draft.dateRange.from}
+                  onChange={(e) => patch((d) => (d.dateRange.from = e.target.value))}
+                  style={{ maxWidth: "12rem" }}
+                />
+              </Field>
+              <Field
+                label="To"
+                hint="End of the window — dates the report and files the trend point under this date."
+              >
+                <input
+                  type="date"
+                  value={draft.dateRange.to}
+                  onChange={(e) => patch((d) => (d.dateRange.to = e.target.value))}
+                  style={{ maxWidth: "12rem" }}
+                />
+              </Field>
+            </div>
+            {draft.dateRange.from > draft.dateRange.to && (
+              <div className="warn-note">
+                The “from” date is after the “to” date — the header range will read backwards.
+              </div>
+            )}
+          </Section>
+
           <div className="toolbar" style={{ marginBottom: "1rem" }}>
             <button
               type="button"
               className="btn btn-primary"
-              onClick={saveParams}
+              onClick={() => saveParams()}
               disabled={saving || !dirty}
             >
               {saving ? "Saving…" : "Save parameters"}
@@ -443,6 +551,12 @@ export default function RunPage() {
               {streaming && (
                 <p className="small muted">
                   <span className="spinner" /> Streaming live…
+                  {elapsedMs != null && (
+                    <>
+                      {" · "}
+                      <span className="mono">{fmtElapsed(elapsedMs)}</span> elapsed
+                    </>
+                  )}
                 </p>
               )}
 
@@ -460,6 +574,25 @@ export default function RunPage() {
                   }}
                 />
               </div>
+
+              {progress.byProvider && progress.byProvider.length > 1 && (
+                <div className="provider-bars">
+                  {progress.byProvider.map((b) => (
+                    <div className="provider-bar" key={b.provider}>
+                      <div className="bar-label">
+                        <span>{PROVIDER_LABEL[b.provider] ?? b.provider}</span>
+                        <span>
+                          {count(b.done)} / {count(b.total)}
+                          {b.failed ? ` · ${count(b.failed)} failed` : ""}
+                        </span>
+                      </div>
+                      <div className="bar bar-mini">
+                        <span style={{ width: `${pct(b.done, b.total)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="bar-label" style={{ marginTop: "0.75rem" }}>
                 <span>Extraction</span>
@@ -490,36 +623,80 @@ export default function RunPage() {
                     <div className="info-note">Run complete — no provider outages.</div>
                   )}
 
-                  {renderState.status === "outage" && (
-                    <OutagePanel
-                      outageProviders={renderState.providers}
-                      completion={renderState.completion}
-                      onRenderAnyway={() => doRender(true)}
-                      onDismiss={() => setRenderState({ status: "idle" })}
-                    />
-                  )}
-                  {renderState.status === "error" && (
-                    <ErrorNote message={`Render failed: ${renderState.message}`} />
-                  )}
-                  {renderState.status === "done" && (
-                    <div className="info-note">
-                      Rendered <span className="mono">{renderState.reportFile}</span>.{" "}
-                      <a href={ROUTES.reports}>View it on the Reports page →</a>
+                  <div className="estimate" style={{ marginBottom: "1rem" }}>
+                    <div className="stat">
+                      <span className="num">
+                        {count(progress.generation?.done)} / {count(progress.generation?.total)}
+                      </span>
+                      <span className="cap">Cells completed</span>
                     </div>
+                    <div className="stat">
+                      <span className="num">
+                        {count(
+                          (progress.generation?.failed ?? 0) + (progress.extraction?.failed ?? 0),
+                        )}
+                      </span>
+                      <span className="cap">Failures</span>
+                    </div>
+                    <div className="stat">
+                      <span className="num">{elapsedMs != null ? fmtElapsed(elapsedMs) : "—"}</span>
+                      <span className="cap">Elapsed</span>
+                    </div>
+                  </div>
+
+                  {failures && failures.length > 0 && (
+                    <details className="warn-note failures">
+                      <summary>
+                        {count(failures.length)} failed{" "}
+                        {failures.length === 1 ? "generation" : "generations"} — click to see the
+                        provider errors
+                      </summary>
+                      <ul className="failure-list">
+                        {failures.map((f, i) => (
+                          <li key={`${f.provider}-${f.promptId}-${f.sampleIndex}-${i}`}>
+                            <div className="failure-head">
+                              <strong>{PROVIDER_LABEL[f.provider] ?? f.provider}</strong>
+                              <span className="mono small">
+                                {f.promptId} · sample {f.sampleIndex}
+                              </span>
+                            </div>
+                            <div className="failure-error mono small">
+                              {f.error || "(no error message recorded)"}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
                   )}
 
-                  {renderState.status !== "outage" && (
-                    <div className="toolbar" style={{ marginTop: "0.5rem" }}>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => doRender()}
-                        disabled={renderState.status === "sending"}
-                      >
-                        {renderState.status === "sending" ? "Rendering…" : "Render report"}
-                      </button>
-                    </div>
-                  )}
+                  <RenderButton
+                    configName={selected}
+                    toolbarStyle={{ marginTop: "0.5rem" }}
+                    beforeRender={
+                      draft.dateRange.to !== today ? (
+                        <div className="warn-note">
+                          Report will be dated{" "}
+                          <span className="mono">{draft.dateRange.to}</span> and its trend point
+                          recorded under that date — because trend points are deduped by (date,
+                          version), a stale date silently <strong>replaces</strong> the prior
+                          period’s point instead of adding a new one. Update?{" "}
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            onClick={setToTodayAndSave}
+                            disabled={saving}
+                          >
+                            {saving ? "Saving…" : "Set to today"}
+                          </button>
+                        </div>
+                      ) : null
+                    }
+                    actions={
+                      <a className="btn btn-sm" href={ROUTES.insights}>
+                        Review answers →
+                      </a>
+                    }
+                  />
                 </>
               )}
             </Section>

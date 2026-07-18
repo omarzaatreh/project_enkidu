@@ -59,12 +59,20 @@ export function GET(req: NextRequest): Response {
       };
 
       // Which phase to report: generation until it completes, then extraction.
+      // The per-provider breakdown rides on every disk-derived frame (including
+      // extraction frames) so the per-provider bars still reflect the FINAL
+      // generation totals once the run flips into the extraction phase.
       const frame = (): ProgressEvent => {
         const p = deriveProgress(loadCells(resultsPath(name)), config);
-        if (p.generation.done < p.generation.total) {
-          return { phase: "generation", ...p.generation };
-        }
-        return { phase: "extraction", ...p.extraction };
+        const inGeneration = p.generation.done < p.generation.total;
+        const phase = inGeneration ? p.generation : p.extraction;
+        return {
+          phase: inGeneration ? "generation" : "extraction",
+          done: phase.done,
+          total: phase.total,
+          failed: phase.failed,
+          byProvider: p.byProvider,
+        };
       };
 
       const finish = (outageProviders?: string[]): void => {
