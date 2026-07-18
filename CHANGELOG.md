@@ -5,6 +5,16 @@ All notable changes to enkidu are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Promote-time competitor domains** — the curation screen infers a suggested
+  domain per discovered competitor (the citation domain most co-cited with that
+  brand), pre-fills an editable field, and stores the confirmed domain on
+  promote. A domain lights the competitor's Insights leaderboard badge and
+  enables URL-form mention detection, which previously required hand-editing the
+  config.
+
 ## [0.2.0] - 2026-07-19
 
 The cockpit stopped being analytically blind. It could run providers and render
@@ -67,5 +77,6 @@ white-labelable one-page HTML report.
   from the `app/` frontend; folded `fixtures/` into `test/fixtures` and `deploy/`
   into `scripts/` for a leaner repo root.
 
+[Unreleased]: https://github.com/omarzaatreh/project_enkidu/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/omarzaatreh/project_enkidu/releases/tag/v0.2.0
 [0.1.0]: https://github.com/omarzaatreh/project_enkidu/releases/tag/v0.1.0
