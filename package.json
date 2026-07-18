@@ -10,15 +10,21 @@
     "capture-fixtures": "tsx scripts/capture-fixtures.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "ui": "next dev -p 4600 -H 127.0.0.1"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "tsx": "^4.23.1",
-    "typescript": "^7.0.2",
+    "typescript": "7.0.2",
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "p-limit": "^7.3.0"
+    "next": "^16.2.10",
+    "p-limit": "^7.3.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   }
 }

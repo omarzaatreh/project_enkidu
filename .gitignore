@@ -12,6 +12,11 @@ reports/
 node_modules/
 dist/
 
+# Next.js (cockpit)
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
 # OS
 .DS_Store
 .gstack/
