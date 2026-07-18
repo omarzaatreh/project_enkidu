@@ -28,7 +28,8 @@ export function GET(req: NextRequest): NextResponse {
     return NextResponse.json({ error: "not-found" }, { status: 404 });
   }
 
-  const candidates = curationCandidates(loadCells(resultsPath(name)), config);
+  const currentPromptTexts = new Set(config.promptSet.prompts.map((p) => p.text));
+  const candidates = curationCandidates(loadCells(resultsPath(name)), config, currentPromptTexts);
   const res: CurationResponse = { candidates };
   return NextResponse.json(res);
 }

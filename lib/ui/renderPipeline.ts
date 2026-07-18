@@ -15,21 +15,40 @@ import { PROVIDER_OUTAGE_THRESHOLD } from "../types.js";
 import type { Cell, Provider, RunConfig, TrendPoint } from "../types.js";
 
 /**
- * Enabled providers below the completion threshold. `planned` is
- * prompts × samples (per provider); only enabled providers are checked, so
- * cells from providers since removed from the config are ignored.
+ * Per enabled-provider completion against the CURRENT prompt set. `completed`
+ * counts ok generation cells whose promptText is still in config.promptSet
+ * (orphaned cells from prompts since removed from the config are ignored, so
+ * the count reflects the report the founder is about to render). `planned` is
+ * prompts × samples per provider.
  */
-export function computeOutageProviders(cells: Cell[], config: RunConfig): Provider[] {
+export function providerCompletion(
+  cells: Cell[],
+  config: RunConfig,
+): Array<{ provider: Provider; completed: number; planned: number }> {
   const planned = config.promptSet.prompts.length * config.samplesPerPrompt;
+  const currentPromptTexts = new Set(config.promptSet.prompts.map((p) => p.text));
   const okCount = new Map<Provider, number>();
   for (const c of cells) {
-    if (c.kind === "generation" && c.status === "ok") {
+    if (c.kind === "generation" && c.status === "ok" && currentPromptTexts.has(c.promptText)) {
       okCount.set(c.provider, (okCount.get(c.provider) ?? 0) + 1);
     }
   }
-  return enabledProviders(config).filter(
-    (p) => (okCount.get(p) ?? 0) / Math.max(planned, 1) < PROVIDER_OUTAGE_THRESHOLD,
-  );
+  return enabledProviders(config).map((provider) => ({
+    provider,
+    completed: okCount.get(provider) ?? 0,
+    planned,
+  }));
+}
+
+/**
+ * Enabled providers below the completion threshold. Only enabled providers are
+ * checked (cells from removed providers are ignored) and only current-prompt-set
+ * cells count toward completion (orphaned cells from removed prompts are ignored).
+ */
+export function computeOutageProviders(cells: Cell[], config: RunConfig): Provider[] {
+  return providerCompletion(cells, config)
+    .filter((c) => c.completed / Math.max(c.planned, 1) < PROVIDER_OUTAGE_THRESHOLD)
+    .map((c) => c.provider);
 }
 
 export interface RenderSuccess {
@@ -70,14 +89,26 @@ export function renderFromResults(args: {
     (t) => t.promptSetVersion === config.promptSet.version && t.date !== config.dateRange.to,
   );
 
-  // Aggregate over enabled providers' cells only, plus extraction cells that
-  // join to a kept generation cell.
+  // Aggregate over enabled providers' CURRENT-prompt-set generation cells only,
+  // plus extraction cells that join to a kept generation cell. Cells for prompts
+  // since removed from the config are orphans in the append-only results file and
+  // must not pollute the counts.
   const enabledSet = new Set(enabledProviders(config));
+  const currentPromptTexts = new Set(config.promptSet.prompts.map((p) => p.text));
   const keptGenIds = new Set(
-    cells.filter((c) => c.kind === "generation" && enabledSet.has(c.provider)).map((c) => c.cellId),
+    cells
+      .filter(
+        (c) =>
+          c.kind === "generation" &&
+          enabledSet.has(c.provider) &&
+          currentPromptTexts.has(c.promptText),
+      )
+      .map((c) => c.cellId),
   );
   const relevantCells = cells.filter((c) =>
-    c.kind === "generation" ? enabledSet.has(c.provider) : keptGenIds.has(c.generationCellId),
+    c.kind === "generation"
+      ? enabledSet.has(c.provider) && currentPromptTexts.has(c.promptText)
+      : keptGenIds.has(c.generationCellId),
   );
 
   const agg = aggregate(relevantCells, config, comparableTrend);

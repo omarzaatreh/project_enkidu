@@ -45,6 +45,17 @@ export default function ReportsPage() {
                     Preview
                   </button>{" "}
                   <span className="mono small">{r.file}</span>
+                  {r.stale && (
+                    <>
+                      {" "}
+                      <span
+                        className="badge badge-dirty"
+                        title="The results for this config changed after this report was rendered."
+                      >
+                        ⚠ may be stale — re-render
+                      </span>
+                    </>
+                  )}
                 </div>
                 <div className="toolbar">
                   <span className="small muted">{when(r.mtime)}</span>

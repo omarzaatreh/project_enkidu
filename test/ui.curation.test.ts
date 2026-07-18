@@ -50,6 +50,32 @@ describe("curationCandidates parity with the old CLI block", () => {
   });
 });
 
+describe("curationCandidates — current-prompt-set filter", () => {
+  const config = makeConfig({ prompts: ["q1"] });
+  const gCurrent = makeGenCell({ promptText: "q1" });
+  const gOrphan = makeGenCell({ promptText: "removed-example" });
+  const cells: Cell[] = [
+    gCurrent,
+    gOrphan,
+    makeExtCell(gCurrent, ["Globex"]),
+    makeExtCell(gOrphan, ["Initech"]), // joined to an orphan generation cell
+  ];
+
+  it("keeps every extraction when no prompt set is supplied (legacy behaviour)", () => {
+    expect(curationCandidates(cells, config)).toEqual([
+      { name: "Globex", count: 1 },
+      { name: "Initech", count: 1 },
+    ]);
+  });
+
+  it("drops extractions joined to orphaned generation cells when the prompt set is supplied", () => {
+    const currentPromptTexts = new Set(config.promptSet.prompts.map((p) => p.text));
+    expect(curationCandidates(cells, config, currentPromptTexts)).toEqual([
+      { name: "Globex", count: 1 },
+    ]);
+  });
+});
+
 describe("promoteCompetitors", () => {
   const client = { ...makeBrand("TIkit"), industry: "legal tech" };
   const config = makeConfig({ client, competitors: [makeBrand("Existing")] });

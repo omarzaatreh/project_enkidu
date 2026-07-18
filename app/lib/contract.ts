@@ -152,15 +152,16 @@ export const API = {
   /**
    * POST /api/render  body: { configName: string; acknowledgeOutage?: boolean }
    *   → { reportFile: string }
-   *   → 409 { error: "outage"; outageProviders: string[] }
+   *   → 409 OutageResponse { error: "outage"; outageProviders; completion }
    * Renders results.jsonl → report HTML. Refuses on a provider outage unless
    * body.acknowledgeOutage === true.
    */
   render: "/api/render",
 
   /**
-   * GET /api/reports → Array<{ file: string; mtime: string }>
-   * Lists rendered reports, newest first (mtime is ISO 8601).
+   * GET /api/reports → ReportListEntry[] { file; mtime; stale }
+   * Lists rendered reports, newest first (mtime is ISO 8601). `stale` is true
+   * when the config's results file is newer than the rendered report.
    */
   reports: "/api/reports",
 
@@ -232,6 +233,12 @@ export interface RenderResponse {
 export interface OutageResponse {
   error: "outage";
   outageProviders: string[];
+  /**
+   * Per enabled provider, how far the CURRENT prompt set got. `completed` is
+   * ok cells for prompts still in the config (orphans excluded); `planned` is
+   * prompts × samplesPerPrompt. Lets the UI explain the outage concretely.
+   */
+  completion: Array<{ provider: string; completed: number; planned: number }>;
 }
 
 /** GET /api/reports response element. */
@@ -239,6 +246,8 @@ export interface ReportListEntry {
   file: string;
   /** ISO 8601 mtime. */
   mtime: string;
+  /** true iff the config's results file exists and is newer than this report. */
+  stale: boolean;
 }
 
 // ---------------------------------------------------------------------------

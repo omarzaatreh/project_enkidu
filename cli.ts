@@ -135,7 +135,8 @@ async function cmdRun(): Promise<void> {
   // Filling that array is what populates the citation-gap table and makes
   // the competitor bars authoritative instead of raw-extraction guesses.
   // (Shared with the cockpit's curation screen via lib/ui/curation.ts.)
-  const candidates = curationCandidates(loadCells(resultsPath), config);
+  const currentPromptTexts = new Set(config.promptSet.prompts.map((p) => p.text));
+  const candidates = curationCandidates(loadCells(resultsPath), config, currentPromptTexts);
   if (candidates.length > 0) {
     const top = candidates.slice(0, 15);
     console.log(`\nDiscovered competitor candidates (add the real ones to "competitors" in ${configPath}):`);

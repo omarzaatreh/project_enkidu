@@ -6,7 +6,7 @@
  * client or a competitor (case-insensitive), sorted by count descending.
  */
 import { dedupeExtractions } from "../extract.js";
-import type { BrandConfig, Cell, ExtractionCell, RunConfig } from "../types.js";
+import type { BrandConfig, Cell, ExtractionCell, GenerationCell, RunConfig } from "../types.js";
 
 export interface CurationCandidate {
   name: string;
@@ -18,17 +18,36 @@ export interface CurationCandidate {
  * already curated. Matches cli.ts byte-for-byte — same lowercase exclusion set,
  * same latest-extraction dedupe, same count map, same descending sort. The CLI
  * slices the top 15 for display; the UI shows the full list.
+ *
+ * When `currentPromptTexts` is supplied, extraction cells that join to an
+ * orphaned generation cell (a prompt since removed from the config) are dropped,
+ * so the discovered list matches the report the CLI/API render from the current
+ * prompt set. Omitting it keeps the legacy all-cells behaviour.
  */
-export function curationCandidates(cells: Cell[], config: RunConfig): CurationCandidate[] {
+export function curationCandidates(
+  cells: Cell[],
+  config: RunConfig,
+  currentPromptTexts?: Set<string>,
+): CurationCandidate[] {
   const curatedNames = new Set(
     [config.client, ...config.competitors].flatMap((b) => [
       b.name.toLowerCase(),
       ...b.aliases.map((a) => a.toLowerCase()),
     ]),
   );
-  const latestExtractions = dedupeExtractions(
-    cells.filter((c): c is ExtractionCell => c.kind === "extraction"),
-  );
+  let extractionCells = cells.filter((c): c is ExtractionCell => c.kind === "extraction");
+  if (currentPromptTexts) {
+    const keptGenIds = new Set(
+      cells
+        .filter(
+          (c): c is GenerationCell =>
+            c.kind === "generation" && currentPromptTexts.has(c.promptText),
+        )
+        .map((c) => c.cellId),
+    );
+    extractionCells = extractionCells.filter((c) => keptGenIds.has(c.generationCellId));
+  }
+  const latestExtractions = dedupeExtractions(extractionCells);
   const discovered = new Map<string, number>();
   for (const c of latestExtractions) {
     for (const b of c.brands ?? []) {

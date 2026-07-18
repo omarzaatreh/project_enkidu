@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isOutage, renderFromResults } from "../lib/ui/renderPipeline.js";
+import {
+  computeOutageProviders,
+  isOutage,
+  providerCompletion,
+  renderFromResults,
+} from "../lib/ui/renderPipeline.js";
 import type { Cell, TrendPoint } from "../lib/types.js";
 import { makeConfig, makeGenCell } from "./helpers.js";
 
@@ -24,6 +29,54 @@ describe("renderFromResults — outage guard", () => {
     if (isOutage(result)) throw new Error("unexpected outage");
     expect(typeof result.html).toBe("string");
     expect(result.html.length).toBeGreaterThan(0);
+  });
+});
+
+describe("orphaned-prompt cells (removed prompts in the append-only results file)", () => {
+  // Config tracks exactly one current prompt "q" (openai, 3 samples → planned 3).
+  const config = singleProviderConfig(3);
+  const mention = "TIkit leads the Dubai market";
+
+  const currentCells: Cell[] = [0, 1, 2].map((s) =>
+    makeGenCell({ promptText: "q", provider: "openai", sampleIndex: s, status: "ok", responseText: mention }),
+  );
+  // Cells for a prompt SINCE REMOVED from the config — orphans that must not count.
+  const orphanCells: Cell[] = [0, 1, 2].map((s) =>
+    makeGenCell({ promptText: "removed-example", provider: "openai", sampleIndex: s, status: "ok", responseText: mention }),
+  );
+
+  it("providerCompletion counts only current-prompt-set ok cells", () => {
+    expect(providerCompletion([...currentCells, ...orphanCells], config)).toEqual([
+      { provider: "openai", completed: 3, planned: 3 },
+    ]);
+    // Control: without the orphans the count is identical.
+    expect(providerCompletion(currentCells, config)).toEqual([
+      { provider: "openai", completed: 3, planned: 3 },
+    ]);
+  });
+
+  it("computeOutageProviders ignores orphan cells in its completion math", () => {
+    // Only orphan cells present → current completion is 0/3 → outage, despite 3 ok cells on disk.
+    expect(computeOutageProviders(orphanCells, config)).toEqual(["openai"]);
+    // Current cells alone clear the threshold; adding orphans doesn't change that.
+    expect(computeOutageProviders(currentCells, config)).toEqual([]);
+    expect(computeOutageProviders([...currentCells, ...orphanCells], config)).toEqual([]);
+  });
+
+  it("renderFromResults excludes orphan cells from aggregate counts", () => {
+    const withOrphans = renderFromResults({ config, cells: [...currentCells, ...orphanCells], priorTrend: [] });
+    const controlOnly = renderFromResults({ config, cells: currentCells, priorTrend: [] });
+    if (isOutage(withOrphans) || isOutage(controlOnly)) throw new Error("unexpected outage");
+
+    // Methodology denominators reflect the current prompt set only (3, not 6).
+    expect(withOrphans.html).toContain("3 of 3 runs completed");
+    // Client mention tally is over current cells only (3 of 3, not 6 of 6).
+    expect(withOrphans.html).toContain("appeared in 3 of 3 runs");
+    expect(withOrphans.html).not.toContain("6 of 6");
+    // The orphan-included render matches the control render byte-for-byte
+    // except for the generatedAt timestamp, so orphans are fully excluded.
+    const strip = (h: string): string => h.replace(/[0-9T:.Z-]{20,}/g, "");
+    expect(strip(withOrphans.html)).toEqual(strip(controlOnly.html));
   });
 });
 

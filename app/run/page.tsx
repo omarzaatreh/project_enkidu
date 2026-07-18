@@ -24,7 +24,7 @@ import {
 import { sendJson, useJson, useSelectedConfig } from "../lib/client";
 import { PER_CALL_USD } from "../lib/pricing";
 import ConfigPicker from "../components/ConfigPicker";
-import { ErrorNote, Field, Loading, Section } from "../components/index";
+import { ErrorNote, Field, Loading, OutagePanel, Section } from "../components/index";
 import { count, pct, usd, when } from "../lib/format";
 
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -220,21 +220,20 @@ export default function RunPage() {
   }, [watchName, runNonce]);
 
   // --- Render --------------------------------------------------------------
-  const [ackOutage, setAckOutage] = useState(false);
   const [renderState, setRenderState] = useState<
     | { status: "idle" }
     | { status: "sending" }
     | { status: "done"; reportFile: string }
-    | { status: "outage"; providers: string[] }
+    | { status: "outage"; providers: string[]; completion: OutageResponse["completion"] }
     | { status: "error"; message: string }
   >({ status: "idle" });
 
-  async function doRender() {
+  async function doRender(acknowledgeOutage = false) {
     if (!selected) return;
     setRenderState({ status: "sending" });
     const res = await sendJson<RenderResponse>(API.render, "POST", {
       configName: selected,
-      acknowledgeOutage: ackOutage,
+      acknowledgeOutage,
     });
     if (res.ok && res.data) {
       setRenderState({ status: "done", reportFile: res.data.reportFile });
@@ -245,6 +244,7 @@ export default function RunPage() {
       setRenderState({
         status: "outage",
         providers: body?.outageProviders ?? [],
+        completion: body?.completion ?? [],
       });
       return;
     }
@@ -491,13 +491,12 @@ export default function RunPage() {
                   )}
 
                   {renderState.status === "outage" && (
-                    <div className="warn-note">
-                      Render refused: outage on{" "}
-                      {renderState.providers.length > 0
-                        ? renderState.providers.join(", ")
-                        : "one or more providers"}
-                      . Acknowledge below to render anyway.
-                    </div>
+                    <OutagePanel
+                      outageProviders={renderState.providers}
+                      completion={renderState.completion}
+                      onRenderAnyway={() => doRender(true)}
+                      onDismiss={() => setRenderState({ status: "idle" })}
+                    />
                   )}
                   {renderState.status === "error" && (
                     <ErrorNote message={`Render failed: ${renderState.message}`} />
@@ -509,26 +508,18 @@ export default function RunPage() {
                     </div>
                   )}
 
-                  <div className="toolbar" style={{ marginTop: "0.5rem" }}>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={doRender}
-                      disabled={renderState.status === "sending"}
-                    >
-                      {renderState.status === "sending" ? "Rendering…" : "Render report"}
-                    </button>
-                    {progress.terminal.outageProviders.length > 0 && (
-                      <label className="inline">
-                        <input
-                          type="checkbox"
-                          checked={ackOutage}
-                          onChange={(e) => setAckOutage(e.target.checked)}
-                        />
-                        Acknowledge outage and render anyway
-                      </label>
-                    )}
-                  </div>
+                  {renderState.status !== "outage" && (
+                    <div className="toolbar" style={{ marginTop: "0.5rem" }}>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => doRender()}
+                        disabled={renderState.status === "sending"}
+                      >
+                        {renderState.status === "sending" ? "Rendering…" : "Render report"}
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </Section>

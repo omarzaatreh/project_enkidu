@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import { loadConfig } from "../../../lib/ui/configStore";
-import { isOutage, renderFromResults } from "../../../lib/ui/renderPipeline";
+import { isOutage, providerCompletion, renderFromResults } from "../../../lib/ui/renderPipeline";
 import { reportPath, resultsPath, trendPath } from "../../lib/contract";
 import type { OutageResponse, RenderRequest, RenderResponse } from "../../lib/contract";
 import type { TrendPoint } from "../../../lib/types";
@@ -48,7 +48,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
 
   if (isOutage(result)) {
-    const res: OutageResponse = { error: "outage", outageProviders: result.outageProviders };
+    const res: OutageResponse = {
+      error: "outage",
+      outageProviders: result.outageProviders,
+      completion: providerCompletion(cells, config),
+    };
     return NextResponse.json(res, { status: 409 });
   }
 

@@ -15,7 +15,7 @@ import {
 } from "../lib/contract";
 import { sendJson, useJson, useSelectedConfig } from "../lib/client";
 import ConfigPicker from "../components/ConfigPicker";
-import { ErrorNote, Loading, Section } from "../components/index";
+import { ErrorNote, Loading, OutagePanel, Section } from "../components/index";
 import { count } from "../lib/format";
 
 export default function CurationPage() {
@@ -67,17 +67,16 @@ export default function CurationPage() {
     | { status: "idle" }
     | { status: "sending" }
     | { status: "done"; reportFile: string }
-    | { status: "outage"; providers: string[] }
+    | { status: "outage"; providers: string[]; completion: OutageResponse["completion"] }
     | { status: "error"; message: string }
   >({ status: "idle" });
-  const [ackOutage, setAckOutage] = useState(false);
 
-  async function reRender() {
+  async function reRender(acknowledgeOutage = false) {
     if (!selected) return;
     setRenderState({ status: "sending" });
     const res = await sendJson<RenderResponse>(API.render, "POST", {
       configName: selected,
-      acknowledgeOutage: ackOutage,
+      acknowledgeOutage,
     });
     if (res.ok && res.data) {
       setRenderState({ status: "done", reportFile: res.data.reportFile });
@@ -85,7 +84,11 @@ export default function CurationPage() {
     }
     if (res.status === 409) {
       const body = res.errorBody as OutageResponse | null;
-      setRenderState({ status: "outage", providers: body?.outageProviders ?? [] });
+      setRenderState({
+        status: "outage",
+        providers: body?.outageProviders ?? [],
+        completion: body?.completion ?? [],
+      });
       return;
     }
     setRenderState({ status: "error", message: res.error ?? "render failed" });
@@ -176,13 +179,12 @@ export default function CurationPage() {
           </div>
 
           {renderState.status === "outage" && (
-            <div className="warn-note">
-              Render refused: outage on{" "}
-              {renderState.providers.length > 0
-                ? renderState.providers.join(", ")
-                : "one or more providers"}
-              . Acknowledge to render anyway.
-            </div>
+            <OutagePanel
+              outageProviders={renderState.providers}
+              completion={renderState.completion}
+              onRenderAnyway={() => reRender(true)}
+              onDismiss={() => setRenderState({ status: "idle" })}
+            />
           )}
           {renderState.status === "error" && (
             <ErrorNote message={`Re-render failed: ${renderState.message}`} />
@@ -194,24 +196,18 @@ export default function CurationPage() {
             </div>
           )}
 
-          <div className="toolbar">
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={reRender}
-              disabled={renderState.status === "sending"}
-            >
-              {renderState.status === "sending" ? "Rendering…" : "Re-render report (free)"}
-            </button>
-            <label className="inline">
-              <input
-                type="checkbox"
-                checked={ackOutage}
-                onChange={(e) => setAckOutage(e.target.checked)}
-              />
-              Acknowledge outage
-            </label>
-          </div>
+          {renderState.status !== "outage" && (
+            <div className="toolbar">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => reRender()}
+                disabled={renderState.status === "sending"}
+              >
+                {renderState.status === "sending" ? "Rendering…" : "Re-render report (free)"}
+              </button>
+            </div>
+          )}
           <p className="small muted">
             Re-rendering reuses existing results — no new model calls, no cost.
           </p>
