@@ -12,6 +12,9 @@ results.jsonl
 /config/*.json
 !/config/*.example.json
 
+# Business strategy / roadmap stays local (names real clients + competitors)
+/TODOS.md
+
 # Node
 node_modules/
 dist/
