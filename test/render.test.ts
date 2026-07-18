@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { htmlEscape, renderReport } from "../lib/render.js";
+import { htmlEscape, renderReport } from "../backend/core/render.js";
 import type {
   AggregateResult,
   BrandConfig,
   ModelStats,
   RunConfig,
-} from "../lib/types.js";
+} from "../backend/core/types.js";
 
 // ---------- Fixture helpers ----------
 

@@ -1,9 +1,9 @@
 /**
  * GET /api/configs → ConfigSummary[]
- * Thin wrapper: lists config/*.json as summaries (logic in lib/ui/configStore).
+ * Thin wrapper: lists config/*.json as summaries (logic in backend/services/configStore).
  */
 import { NextResponse } from "next/server";
-import { listConfigs } from "../../../lib/ui/configStore";
+import { listConfigs } from "../../../backend/services/configStore";
 import type { ConfigSummary } from "../../lib/contract";
 
 export const dynamic = "force-dynamic";

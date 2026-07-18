@@ -7,7 +7,7 @@ import {
   activeRun,
   releaseLock,
   RunInProgressError,
-} from "../lib/ui/runManager.js";
+} from "../backend/services/runManager.js";
 
 let dir: string;
 let lockPath: string;

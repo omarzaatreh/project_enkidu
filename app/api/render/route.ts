@@ -1,19 +1,19 @@
 /**
  * POST /api/render body: { configName, acknowledgeOutage? }
  *   → { reportFile } | 409 { error: "outage", outageProviders }
- * Renders results.jsonl → report HTML (lib/ui/renderPipeline), writing
+ * Renders results.jsonl → report HTML (backend/services/renderPipeline), writing
  * reportPath(name, today) and trendPath(name). Refuses on outage unless
  * acknowledged.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
-import { loadConfig } from "../../../lib/ui/configStore";
-import { isOutage, providerCompletion, renderFromResults } from "../../../lib/ui/renderPipeline";
+import { loadConfig } from "../../../backend/services/configStore";
+import { isOutage, providerCompletion, renderFromResults } from "../../../backend/services/renderPipeline";
 import { reportPath, resultsPath, trendPath } from "../../lib/contract";
 import type { OutageResponse, RenderRequest, RenderResponse } from "../../lib/contract";
-import type { TrendPoint } from "../../../lib/types";
-import { loadCells } from "../_lib/cells";
+import type { TrendPoint } from "../../../backend/core/types";
+import { loadCells } from "../../../backend/services/cells";
 
 export const dynamic = "force-dynamic";
 

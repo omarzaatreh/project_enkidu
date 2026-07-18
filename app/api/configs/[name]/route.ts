@@ -2,10 +2,10 @@
  * GET  /api/configs/[name] → RunConfig (verbatim)
  * PUT  /api/configs/[name]  body: RunConfig → { ok, promptSetVersion }
  * The PUT auto-bumps promptSet.version — the caller must NOT set it. Logic in
- * lib/ui/configStore.
+ * backend/services/configStore.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { loadConfig, saveConfig } from "../../../../lib/ui/configStore";
+import { loadConfig, saveConfig } from "../../../../backend/services/configStore";
 import type { PutConfigResponse, RunConfig } from "../../../lib/contract";
 
 export const dynamic = "force-dynamic";

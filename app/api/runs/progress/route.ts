@@ -10,14 +10,14 @@
  * first frame.
  */
 import { NextRequest } from "next/server";
-import { loadConfig } from "../../../../lib/ui/configStore";
-import { deriveProgress } from "../../../../lib/ui/progress";
-import { computeOutageProviders } from "../../../../lib/ui/renderPipeline";
-import { activeRun, runEvents } from "../../../../lib/ui/runManager";
-import type { DoneTick, ProgressTick } from "../../../../lib/ui/runManager";
+import { loadConfig } from "../../../../backend/services/configStore";
+import { deriveProgress } from "../../../../backend/services/progress";
+import { computeOutageProviders } from "../../../../backend/services/renderPipeline";
+import { activeRun, runEvents } from "../../../../backend/services/runManager";
+import type { DoneTick, ProgressTick } from "../../../../backend/services/runManager";
 import { resultsPath } from "../../../lib/contract";
 import type { ProgressEvent, RunConfig } from "../../../lib/contract";
-import { loadCells } from "../../_lib/cells";
+import { loadCells } from "../../../../backend/services/cells";
 
 export const dynamic = "force-dynamic";
 

@@ -11,7 +11,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { RunConfig } from "../types.js";
+import type { RunConfig } from "../core/types.js";
 
 /** Repo-root-relative config directory (matches the CLI + contract layout). */
 export const CONFIG_DIR = "config";
@@ -19,7 +19,7 @@ export const CONFIG_DIR = "config";
 /**
  * One-line summary of a config file for the list screen. Structurally identical
  * to ConfigSummary in app/lib/contract.ts (the route returns it verbatim); it is
- * duplicated here so lib/ui stays under the root tsconfig without importing app/.
+ * duplicated here so backend/services stays under the root tsconfig without importing app/.
  */
 export interface ConfigSummary {
   name: string;

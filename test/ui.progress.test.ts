@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { deriveProgress } from "../lib/ui/progress.js";
-import type { Cell, ExtractionCell } from "../lib/types.js";
+import { deriveProgress } from "../backend/services/progress.js";
+import type { Cell, ExtractionCell } from "../backend/core/types.js";
 import { makeConfig, makeExtCell, makeGenCell } from "./helpers.js";
 
 // 1 prompt × 3 providers × 2 samples = 6 planned generation cells.

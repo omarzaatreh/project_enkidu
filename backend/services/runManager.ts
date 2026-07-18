@@ -11,15 +11,15 @@
 import { EventEmitter } from "node:events";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { Cell, GenerationCell, Provider, RunConfig } from "../types.js";
-import { makeAdapters } from "../adapters/index.js";
-import { enabledProviders, runExtraction, runGeneration } from "../runner.js";
+import type { Cell, GenerationCell, Provider, RunConfig } from "../core/types.js";
+import { makeAdapters } from "../core/adapters/index.js";
+import { enabledProviders, runExtraction, runGeneration } from "../core/runner.js";
 import { loadConfig } from "./configStore.js";
 import { computeOutageProviders } from "./renderPipeline.js";
 import { ENV_KEY, loadDotEnv, MissingKeyError } from "./env.js";
 
 // Per-config on-disk layout (mirrors app/lib/contract.ts — kept in sync there;
-// lib/ui cannot import app/ under the root tsconfig).
+// backend/services cannot import app/ under the root tsconfig).
 export const LOCK_PATH = "results/.run.lock";
 const resultsPathFor = (name: string): string => `results/${name}.jsonl`;
 

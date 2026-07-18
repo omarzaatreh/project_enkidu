@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpError, callWithRetry } from "../lib/shared/callWithRetry.js";
+import { HttpError, callWithRetry } from "../backend/core/shared/callWithRetry.js";
 
 /** Instant sleep that records whether each call's promise actually resolved. */
 function makeSleep() {

@@ -1,8 +1,8 @@
 /**
  * enkidu CLI — two commands, deliberately separate (eng review 6A):
  *
- *   tsx cli.ts run    --config config/tikit.json     # PAID: ~300 grounded calls
- *   tsx cli.ts render --config config/tikit.json     # FREE: results.jsonl → report.html
+ *   tsx cli/index.ts run    --config config/tikit.json     # PAID: ~300 grounded calls
+ *   tsx cli/index.ts render --config config/tikit.json     # FREE: results.jsonl → report.html
  *
  * `run` is resumable: cells append to results.jsonl as they complete; on
  * restart, ok cells are skipped (content-hash IDs — edited prompts re-run
@@ -10,12 +10,12 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Cell, GenerationCell, Provider, RunConfig, TrendPoint } from "./lib/types.js";
-import { MIN_SAMPLES_PER_CELL, PROVIDER_OUTAGE_THRESHOLD } from "./lib/types.js";
-import { makeAdapters } from "./lib/adapters/index.js";
-import { enabledProviders, runExtraction, runGeneration } from "./lib/runner.js";
-import { curationCandidates } from "./lib/ui/curation.js";
-import { isOutage, renderFromResults } from "./lib/ui/renderPipeline.js";
+import type { Cell, GenerationCell, Provider, RunConfig, TrendPoint } from "../backend/core/types.js";
+import { MIN_SAMPLES_PER_CELL, PROVIDER_OUTAGE_THRESHOLD } from "../backend/core/types.js";
+import { makeAdapters } from "../backend/core/adapters/index.js";
+import { enabledProviders, runExtraction, runGeneration } from "../backend/core/runner.js";
+import { curationCandidates } from "../backend/services/curation.js";
+import { isOutage, renderFromResults } from "../backend/services/renderPipeline.js";
 
 // ---------- tiny arg/env plumbing (explicit > clever; no deps) ----------
 
@@ -134,7 +134,7 @@ async function cmdRun(): Promise<void> {
   // Curation candidates: discovered brands not yet in config.competitors.
   // Filling that array is what populates the citation-gap table and makes
   // the competitor bars authoritative instead of raw-extraction guesses.
-  // (Shared with the cockpit's curation screen via lib/ui/curation.ts.)
+  // (Shared with the cockpit's curation screen via backend/services/curation.ts.)
   const currentPromptTexts = new Set(config.promptSet.prompts.map((p) => p.text));
   const candidates = curationCandidates(loadCells(resultsPath), config, currentPromptTexts);
   if (candidates.length > 0) {
@@ -169,7 +169,7 @@ async function cmdRender(): Promise<void> {
     ? (JSON.parse(readFileSync(trendPath, "utf8")) as TrendPoint[])
     : [];
 
-  // Render core is shared with POST /api/render via lib/ui/renderPipeline.ts.
+  // Render core is shared with POST /api/render via backend/services/renderPipeline.ts.
   // Outage guard: rendering a report with a dead provider column is a founder
   // decision (design doc report-level failure policy), not a default.
   const result = renderFromResults({
@@ -199,4 +199,4 @@ async function cmdRender(): Promise<void> {
 const cmd = process.argv[2];
 if (cmd === "run") await cmdRun();
 else if (cmd === "render") await cmdRender();
-else fail(`usage: tsx cli.ts <run|render> --config <path> [--results <path>] [--out <path>]`);
+else fail(`usage: tsx cli/index.ts <run|render> --config <path> [--results <path>] [--out <path>]`);

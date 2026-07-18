@@ -9,10 +9,10 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseOpenAIResponse } from "../lib/adapters/openai.js";
-import { parseAnthropicResponse } from "../lib/adapters/anthropic.js";
-import { parsePerplexityResponse } from "../lib/adapters/perplexity.js";
-import { urlToDomain } from "../lib/shared/normalize.js";
+import { parseOpenAIResponse } from "../backend/core/adapters/openai.js";
+import { parseAnthropicResponse } from "../backend/core/adapters/anthropic.js";
+import { parsePerplexityResponse } from "../backend/core/adapters/perplexity.js";
+import { urlToDomain } from "../backend/core/shared/normalize.js";
 
 function loadFixture(name: string): Record<string, unknown> {
   const url = new URL(`../fixtures/${name}`, import.meta.url);

@@ -1,9 +1,9 @@
 /**
  * POST /api/runs  body: { configName } → { started: true } | 409 run-in-progress
- * Acquires the run lock and starts the in-process driver (lib/ui/runManager).
+ * Acquires the run lock and starts the in-process driver (backend/services/runManager).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { RunInProgressError, startRun } from "../../../lib/ui/runManager";
+import { RunInProgressError, startRun } from "../../../backend/services/runManager";
 import type { StartRunRequest, StartRunResponse } from "../../lib/contract";
 
 export const dynamic = "force-dynamic";

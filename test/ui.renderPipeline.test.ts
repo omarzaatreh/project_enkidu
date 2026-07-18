@@ -4,8 +4,8 @@ import {
   isOutage,
   providerCompletion,
   renderFromResults,
-} from "../lib/ui/renderPipeline.js";
-import type { Cell, TrendPoint } from "../lib/types.js";
+} from "../backend/services/renderPipeline.js";
+import type { Cell, TrendPoint } from "../backend/core/types.js";
 import { makeConfig, makeGenCell } from "./helpers.js";
 
 function singleProviderConfig(samples: number) {

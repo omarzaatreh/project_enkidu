@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { curationCandidates, promoteCompetitors } from "../lib/ui/curation.js";
-import { dedupeExtractions } from "../lib/extract.js";
-import type { Cell, ExtractionCell, RunConfig } from "../lib/types.js";
+import { curationCandidates, promoteCompetitors } from "../backend/services/curation.js";
+import { dedupeExtractions } from "../backend/core/extract.js";
+import type { Cell, ExtractionCell, RunConfig } from "../backend/core/types.js";
 import { makeBrand, makeConfig, makeExtCell, makeGenCell } from "./helpers.js";
 
 /** The exact tally cli.ts used to compute inline (the pre-refactor block). */

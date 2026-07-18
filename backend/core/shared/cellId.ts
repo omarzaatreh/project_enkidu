@@ -29,7 +29,7 @@ export function extractionCellId(args: {
   extractorModel: string;
   /**
    * Version of the extraction PROMPT (see EXTRACTION_PROMPT_VERSION in
-   * lib/extract.ts). Part of the hash for the same reason prompt text is
+   * backend/core/extract.ts). Part of the hash for the same reason prompt text is
    * hashed into generation cells: improving the extraction prompt must
    * invalidate stale extractions, not silently reuse them.
    */

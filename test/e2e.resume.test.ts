@@ -16,10 +16,10 @@ import type {
   GenerationCell,
   Provider,
   RunConfig,
-} from "../lib/types.js";
-import { runGeneration, GROUNDING_CONFIG } from "../lib/runner.js";
-import { generationCellId } from "../lib/shared/cellId.js";
-import { aggregate } from "../lib/aggregate.js";
+} from "../backend/core/types.js";
+import { runGeneration, GROUNDING_CONFIG } from "../backend/core/runner.js";
+import { generationCellId } from "../backend/core/shared/cellId.js";
+import { aggregate } from "../backend/core/aggregate.js";
 
 const CONFIG: RunConfig = {
   client: { name: "TIkit", aliases: ["Tikit"], domain: "tikit.com" },

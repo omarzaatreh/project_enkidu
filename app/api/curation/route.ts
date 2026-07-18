@@ -1,19 +1,19 @@
 /**
  * GET  /api/curation?config=name → { candidates }
  * POST /api/curation  body: { configName, promote } → { ok, competitors }
- * Curation tally + promote share lib/ui/curation with the CLI. Promote saves
+ * Curation tally + promote share backend/services/curation with the CLI. Promote saves
  * the config (auto-bumping nothing — prompt texts are untouched).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { loadConfig, saveConfig } from "../../../lib/ui/configStore";
-import { curationCandidates, promoteCompetitors } from "../../../lib/ui/curation";
+import { loadConfig, saveConfig } from "../../../backend/services/configStore";
+import { curationCandidates, promoteCompetitors } from "../../../backend/services/curation";
 import { resultsPath } from "../../lib/contract";
 import type {
   CurationPromoteResponse,
   CurationResponse,
   Curation_PromoteRequest,
 } from "../../lib/contract";
-import { loadCells } from "../_lib/cells";
+import { loadCells } from "../../../backend/services/cells";
 
 export const dynamic = "force-dynamic";
 

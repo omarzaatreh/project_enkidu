@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { aggregate } from "../lib/aggregate.js";
-import type { GenerationCell, ModelStats, TrendPoint } from "../lib/types.js";
+import { aggregate } from "../backend/core/aggregate.js";
+import type { GenerationCell, ModelStats, TrendPoint } from "../backend/core/types.js";
 import { makeBrand, makeCitation, makeConfig, makeGenCell } from "./helpers.js";
 
 const clio = makeBrand("Clio", [], "clio.com");

@@ -1,10 +1,10 @@
 /**
- * Tiny disk reader shared by the route handlers. Kept out of lib/ui because it
- * is app-only glue (the route wrappers own file loading); the heavy logic lives
- * in lib/ui and is unit-tested under the root harness.
+ * Tiny disk reader shared by the route handlers. Pure JSONL→Cell[] parsing with
+ * no route/request coupling, so it lives with the other backend service logic
+ * under backend/services and can be reused outside the Next routes.
  */
 import { existsSync, readFileSync } from "node:fs";
-import type { Cell } from "../../../lib/types";
+import type { Cell } from "../core/types.js";
 
 /** Read a per-config results.jsonl into Cell[] (missing file → []). */
 export function loadCells(path: string): Cell[] {

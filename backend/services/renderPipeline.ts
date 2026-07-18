@@ -8,11 +8,11 @@
  * policy): rendering refuses when a provider is below the completion threshold
  * unless the caller acknowledges it.
  */
-import { aggregate } from "../aggregate.js";
-import { renderReport } from "../render.js";
-import { enabledProviders } from "../runner.js";
-import { PROVIDER_OUTAGE_THRESHOLD } from "../types.js";
-import type { Cell, Provider, RunConfig, TrendPoint } from "../types.js";
+import { aggregate } from "../core/aggregate.js";
+import { renderReport } from "../core/render.js";
+import { enabledProviders } from "../core/runner.js";
+import { PROVIDER_OUTAGE_THRESHOLD } from "../core/types.js";
+import type { Cell, Provider, RunConfig, TrendPoint } from "../core/types.js";
 
 /**
  * Per enabled-provider completion against the CURRENT prompt set. `completed`

@@ -4,9 +4,9 @@
  * cells from since-removed providers doesn't contaminate a cheaper re-render.
  */
 import { describe, expect, it } from "vitest";
-import type { Adapter, Cell, Provider, RunConfig } from "../lib/types.js";
-import { enabledProviders, runGeneration } from "../lib/runner.js";
-import { aggregate } from "../lib/aggregate.js";
+import type { Adapter, Cell, Provider, RunConfig } from "../backend/core/types.js";
+import { enabledProviders, runGeneration } from "../backend/core/runner.js";
+import { aggregate } from "../backend/core/aggregate.js";
 
 const BASE: Omit<RunConfig, "models"> = {
   client: { name: "TIkit", aliases: ["Tikit"], domain: "tikit.com" },

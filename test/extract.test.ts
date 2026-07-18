@@ -4,8 +4,8 @@ import {
   detectMention,
   parseExtractionResponse,
   tallyCompetitors,
-} from "../lib/extract.js";
-import { proseContainsAlias } from "../lib/shared/normalize.js";
+} from "../backend/core/extract.js";
+import { proseContainsAlias } from "../backend/core/shared/normalize.js";
 import { makeBrand, makeExtCell, makeGenCell } from "./helpers.js";
 
 const client = makeBrand("TIkit", ["Tikit Ltd", "tickit"], "tikit.com");
@@ -177,7 +177,7 @@ describe("tallyCompetitors", () => {
 
 describe("dedupeExtractions — latest-wins over superseded extraction cells", () => {
   it("keeps only the newest ok extraction per generation cell", async () => {
-    const { dedupeExtractions } = await import("../lib/extract.js");
+    const { dedupeExtractions } = await import("../backend/core/extract.js");
     const mk = (genId: string, ts: string, brands: string[], status: "ok" | "failed" = "ok") => ({
       kind: "extraction" as const,
       cellId: `${genId}-${ts}`,

@@ -5,8 +5,8 @@
  * latest-wins, count brand mentions, exclude anything already curated as the
  * client or a competitor (case-insensitive), sorted by count descending.
  */
-import { dedupeExtractions } from "../extract.js";
-import type { BrandConfig, Cell, ExtractionCell, GenerationCell, RunConfig } from "../types.js";
+import { dedupeExtractions } from "../core/extract.js";
+import type { BrandConfig, Cell, ExtractionCell, GenerationCell, RunConfig } from "../core/types.js";
 
 export interface CurationCandidate {
   name: string;

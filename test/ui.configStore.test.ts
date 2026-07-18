@@ -7,7 +7,7 @@ import {
   loadConfig,
   promptSetHash,
   saveConfig,
-} from "../lib/ui/configStore.js";
+} from "../backend/services/configStore.js";
 import { makeConfig } from "./helpers.js";
 
 let dir: string;

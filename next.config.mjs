@@ -9,14 +9,15 @@ const nextConfig = {
   typescript: {
     tsconfigPath: "app/tsconfig.json",
   },
-  // The API routes (app/api/**) call into lib/ui, which uses NodeNext relative
-  // imports WITH .js extensions (e.g. `import "../runner.js"`). webpack resolves
-  // those .js specifiers to the .ts source via extensionAlias below.
+  // The API routes (app/api/**) call into backend/services, which uses NodeNext
+  // relative imports WITH .js extensions (e.g. `import "../core/runner.js"`).
+  // webpack resolves those .js specifiers to the .ts source via extensionAlias
+  // below.
   //
   // Turbopack (Next 16's default dev bundler) has no equivalent extension-remap
   // for explicit `.js`→`.ts` imports — `turbopack.resolveExtensions` only
-  // affects EXTENSIONLESS specifiers, so every route importing lib/ui 500s with
-  // "Can't resolve '../runner.js'". Hence `npm run ui` pins `--webpack`
+  // affects EXTENSIONLESS specifiers, so every route importing backend/services
+  // 500s with "Can't resolve '../core/runner.js'". Hence `npm run ui` pins `--webpack`
   // (see package.json). Revisit if Turbopack gains an extensionAlias option.
   webpack: (config) => {
     config.resolve.extensionAlias = {

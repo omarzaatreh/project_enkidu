@@ -1,11 +1,11 @@
 /**
  * Server-side env loading for the cockpit (design decision 7: keys never reach
- * the browser). This is the `loadDotEnv` from cli.ts, moved into lib/ui so the
+ * the browser). This is the `loadDotEnv` from cli.ts, moved into backend/services so the
  * run manager and route handlers share ONE loader — keys are read from .env
  * into process.env server-side and never serialized into any response.
  */
 import { existsSync, readFileSync } from "node:fs";
-import type { Provider } from "../types.js";
+import type { Provider } from "../core/types.js";
 
 /** Provider → the env var holding its API key. */
 export const ENV_KEY: Record<Provider, string> = {

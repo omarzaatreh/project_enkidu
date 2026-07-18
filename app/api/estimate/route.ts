@@ -1,16 +1,16 @@
 /**
  * GET /api/estimate?config=name → EstimateResponse
- * Resume-aware scope (lib/ui/estimate) × per-call price constants (app/lib/
+ * Resume-aware scope (backend/services/estimate) × per-call price constants (app/lib/
  * pricing). estUsd covers the new generation calls plus one cheap extraction
  * call per new ok cell (assumes new calls succeed) — a rough pre-run number.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { loadConfig } from "../../../lib/ui/configStore";
-import { estimateCalls } from "../../../lib/ui/estimate";
+import { loadConfig } from "../../../backend/services/configStore";
+import { estimateCalls } from "../../../backend/services/estimate";
 import { resultsPath } from "../../lib/contract";
 import { EXTRACTION_PER_CALL_USD, PER_CALL_USD } from "../../lib/pricing";
 import type { EstimateResponse } from "../../lib/contract";
-import { loadCells } from "../_lib/cells";
+import { loadCells } from "../../../backend/services/cells";
 
 export const dynamic = "force-dynamic";
 

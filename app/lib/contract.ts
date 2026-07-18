@@ -2,16 +2,16 @@
  * Cockpit API contract — the coordination surface between the two later agents
  * (Lane A implements the API routes; Lane B builds the pages). BOTH import from
  * this file, so every type and constant here is a hard contract: change it and
- * you change both sides at once. Keep it in sync with lib/types.ts.
+ * you change both sides at once. Keep it in sync with backend/core/types.ts.
  *
  * Nothing here is "live" — no I/O, no logic — only the shapes of requests and
  * responses, the route paths, and the per-config data-layout paths.
  */
 
-// RunConfig is the single source of truth for a run (see lib/types.ts). The GET
+// RunConfig is the single source of truth for a run (see backend/core/types.ts). The GET
 // /api/configs/[name] endpoint returns it verbatim; PUT accepts it verbatim.
 // Bundler resolution (app/tsconfig.json) resolves this cross-config import.
-import type { RunConfig, Provider } from "../../lib/types";
+import type { RunConfig, Provider } from "../../backend/core/types";
 
 // Re-exported so Lane A/B can `import type { RunConfig } from "@/app/lib/contract"`
 // without reaching across the tsconfig boundary into lib/ themselves.

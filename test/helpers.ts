@@ -4,7 +4,7 @@
  * so extraction cells join to generation cells exactly as in production.
  */
 
-import { extractionCellId, generationCellId } from "../lib/shared/cellId.js";
+import { extractionCellId, generationCellId } from "../backend/core/shared/cellId.js";
 import type {
   BrandConfig,
   Citation,
@@ -12,7 +12,7 @@ import type {
   GenerationCell,
   Provider,
   RunConfig,
-} from "../lib/types.js";
+} from "../backend/core/types.js";
 
 export function makeBrand(
   name: string,

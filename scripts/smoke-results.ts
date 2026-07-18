@@ -8,9 +8,9 @@
  * Never mix with real data: it wipes results/ first.
  */
 import { appendFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
-import { runGeneration } from "../lib/runner.js";
-import { extractionCellId } from "../lib/shared/cellId.js";
-import type { Adapter, Cell, GenerationCell, Provider, RunConfig } from "../lib/types.js";
+import { runGeneration } from "../backend/core/runner.js";
+import { extractionCellId } from "../backend/core/shared/cellId.js";
+import type { Adapter, Cell, GenerationCell, Provider, RunConfig } from "../backend/core/types.js";
 
 const configPath = process.argv[2] ?? "config/tikit.example.json";
 const config = JSON.parse(readFileSync(configPath, "utf8")) as RunConfig;

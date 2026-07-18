@@ -10,9 +10,9 @@
  * follows the ok generations (the runner's extraction targets), using
  * latest-wins dedupe per generation cell.
  */
-import { generationCellId } from "../shared/cellId.js";
-import { enabledProviders, GROUNDING_CONFIG } from "../runner.js";
-import type { Cell, ExtractionCell, GenerationCell, RunConfig } from "../types.js";
+import { generationCellId } from "../core/shared/cellId.js";
+import { enabledProviders, GROUNDING_CONFIG } from "../core/runner.js";
+import type { Cell, ExtractionCell, GenerationCell, RunConfig } from "../core/types.js";
 
 export interface PhaseProgress {
   done: number;

@@ -5,8 +5,8 @@
   "type": "module",
   "description": "AI Visibility Report — measure how often LLMs mention a brand, render a white-labelable report",
   "scripts": {
-    "run": "tsx cli.ts run",
-    "render": "tsx cli.ts render",
+    "run": "tsx cli/index.ts run",
+    "render": "tsx cli/index.ts render",
     "capture-fixtures": "tsx scripts/capture-fixtures.ts",
     "test": "vitest run",
     "test:watch": "vitest",
