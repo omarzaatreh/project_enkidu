@@ -12,7 +12,7 @@ import { runGeneration } from "../backend/core/runner.js";
 import { extractionCellId } from "../backend/core/shared/cellId.js";
 import type { Adapter, Cell, GenerationCell, Provider, RunConfig } from "../backend/core/types.js";
 
-const configPath = process.argv[2] ?? "config/tikit.example.json";
+const configPath = process.argv[2] ?? "config/full.example.json";
 const config = JSON.parse(readFileSync(configPath, "utf8")) as RunConfig;
 
 rmSync("results", { recursive: true, force: true });

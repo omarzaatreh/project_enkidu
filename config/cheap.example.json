@@ -1,0 +1,25 @@
+{
+  "client": {
+    "name": "Acme Analytics",
+    "aliases": ["Acme Analytics", "Acme"],
+    "domain": "acme.example",
+    "industry": "product analytics platform"
+  },
+  "competitors": [],
+  "promptSet": {
+    "version": "v1",
+    "prompts": [
+      { "id": "recommendation", "text": "What are the best product analytics platforms in 2026?", "category": "recommendation" },
+      { "id": "comparison", "text": "Compare the top product analytics tools for startups", "category": "comparison" }
+    ]
+  },
+  "models": {
+    "anthropic": "claude-sonnet-5"
+  },
+  "samplesPerPrompt": 3,
+  "whiteLabel": {
+    "agencyName": "Your Agency",
+    "accentColor": "#1a56db"
+  },
+  "dateRange": { "from": "2026-01-01", "to": "2026-01-31" }
+}

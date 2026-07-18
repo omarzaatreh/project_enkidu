@@ -8,6 +8,10 @@
 results.jsonl
 /reports/
 
+# Real client configs stay local; only *.example.json templates are committed
+/config/*.json
+!/config/*.example.json
+
 # Node
 node_modules/
 dist/

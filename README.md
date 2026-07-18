@@ -27,7 +27,7 @@ run (one = cheap report, three = full report); `samplesPerPrompt` sets depth
 A future hosted UI writes this same config.
 
 ```bash
-npm run run -- --config config/tikit-cheap.example.json   # anthropic-only, 3 samples
+npm run run -- --config config/cheap.example.json   # anthropic-only, 3 samples
 ```
 
 Cheap mode with 20 prompts: 20 × 1 provider × 3 samples = 60 grounded calls
