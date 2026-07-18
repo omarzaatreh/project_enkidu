@@ -10,13 +10,12 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { Cell, ExtractionCell, GenerationCell, Provider, RunConfig, TrendPoint } from "./lib/types.js";
+import type { Cell, GenerationCell, Provider, RunConfig, TrendPoint } from "./lib/types.js";
 import { MIN_SAMPLES_PER_CELL, PROVIDER_OUTAGE_THRESHOLD } from "./lib/types.js";
 import { makeAdapters } from "./lib/adapters/index.js";
-import { dedupeExtractions } from "./lib/extract.js";
 import { enabledProviders, runExtraction, runGeneration } from "./lib/runner.js";
-import { aggregate } from "./lib/aggregate.js";
-import { renderReport } from "./lib/render.js";
+import { curationCandidates } from "./lib/ui/curation.js";
+import { isOutage, renderFromResults } from "./lib/ui/renderPipeline.js";
 
 // ---------- tiny arg/env plumbing (explicit > clever; no deps) ----------
 
@@ -135,24 +134,12 @@ async function cmdRun(): Promise<void> {
   // Curation candidates: discovered brands not yet in config.competitors.
   // Filling that array is what populates the citation-gap table and makes
   // the competitor bars authoritative instead of raw-extraction guesses.
-  const finalCells = loadCells(resultsPath);
-  const curatedNames = new Set(
-    [config.client, ...config.competitors].flatMap((b) => [b.name.toLowerCase(), ...b.aliases.map((a) => a.toLowerCase())]),
-  );
-  const latestExtractions = dedupeExtractions(
-    finalCells.filter((c): c is ExtractionCell => c.kind === "extraction"),
-  );
-  const discovered = new Map<string, number>();
-  for (const c of latestExtractions) {
-    for (const b of c.brands ?? []) {
-      if (curatedNames.has(b.toLowerCase())) continue;
-      discovered.set(b, (discovered.get(b) ?? 0) + 1);
-    }
-  }
-  if (discovered.size > 0) {
-    const top = [...discovered.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15);
+  // (Shared with the cockpit's curation screen via lib/ui/curation.ts.)
+  const candidates = curationCandidates(loadCells(resultsPath), config);
+  if (candidates.length > 0) {
+    const top = candidates.slice(0, 15);
     console.log(`\nDiscovered competitor candidates (add the real ones to "competitors" in ${configPath}):`);
-    for (const [name, count] of top) console.log(`  ${String(count).padStart(3)}× ${name}`);
+    for (const { name, count } of top) console.log(`  ${String(count).padStart(3)}× ${name}`);
   }
 
   if (outcome.outageProviders.length > 0) {
@@ -177,60 +164,31 @@ async function cmdRender(): Promise<void> {
   const cells = loadCells(resultsPath);
   if (cells.length === 0) fail(`no cells in ${resultsPath} — run \`npm run run\` first`);
 
-  // Outage guard: rendering a report with a dead provider column is a
-  // founder decision (design doc report-level failure policy), not a default.
-  // Only ENABLED providers are checked — cells from providers no longer in
-  // the config (e.g. after switching to a cheaper model set) are ignored.
-  const planned = config.promptSet.prompts.length * config.samplesPerPrompt;
-  const okCount = new Map<Provider, number>();
-  for (const c of cells)
-    if (c.kind === "generation" && c.status === "ok")
-      okCount.set(c.provider, (okCount.get(c.provider) ?? 0) + 1);
-  const outages = enabledProviders(config).filter(
-    (p) => (okCount.get(p) ?? 0) / Math.max(planned, 1) < PROVIDER_OUTAGE_THRESHOLD,
-  );
-  if (outages.length > 0 && process.argv.indexOf("--acknowledge-outage") === -1) {
+  const priorTrend: TrendPoint[] = existsSync(trendPath)
+    ? (JSON.parse(readFileSync(trendPath, "utf8")) as TrendPoint[])
+    : [];
+
+  // Render core is shared with POST /api/render via lib/ui/renderPipeline.ts.
+  // Outage guard: rendering a report with a dead provider column is a founder
+  // decision (design doc report-level failure policy), not a default.
+  const result = renderFromResults({
+    config,
+    cells,
+    priorTrend,
+    acknowledgeOutage: process.argv.indexOf("--acknowledge-outage") !== -1,
+  });
+  if (isOutage(result)) {
     fail(
-      `provider(s) below ${PROVIDER_OUTAGE_THRESHOLD * 100}% completion: ${outages.join(", ")}. ` +
+      `provider(s) below ${PROVIDER_OUTAGE_THRESHOLD * 100}% completion: ${result.outageProviders.join(", ")}. ` +
         `Re-run to fill gaps, or pass --acknowledge-outage to ship with the caveat.`,
     );
   }
 
-  const priorTrend: TrendPoint[] = existsSync(trendPath)
-    ? (JSON.parse(readFileSync(trendPath, "utf8")) as TrendPoint[])
-    : [];
-  // Only same-prompt-set-version points are comparable (design doc versioning
-  // rule), and a prior point for the CURRENT period is dropped — re-rendering
-  // the same date range replaces its point rather than duplicating it (a
-  // same-day re-render otherwise produced a degenerate two-point flat trend).
-  const comparableTrend = priorTrend.filter(
-    (t) => t.promptSetVersion === config.promptSet.version && t.date !== config.dateRange.to,
-  );
-
-  // Aggregate over enabled providers' cells only, and only extraction cells
-  // that join to a kept generation cell — a results file may carry cells from
-  // providers that were since removed from the config.
-  const enabledSet = new Set(enabledProviders(config));
-  const keptGenIds = new Set(
-    cells.filter((c) => c.kind === "generation" && enabledSet.has(c.provider)).map((c) => c.cellId),
-  );
-  const relevantCells = cells.filter((c) =>
-    c.kind === "generation" ? enabledSet.has(c.provider) : keptGenIds.has(c.generationCellId),
-  );
-
-  const agg = aggregate(relevantCells, config, comparableTrend);
-  const html = renderReport(agg, config);
-
   mkdirSync(dirname(outPath), { recursive: true });
-  writeFileSync(outPath, html);
+  writeFileSync(outPath, result.html);
 
-  // Persist trend, deduped by (date, version) so re-renders are idempotent.
-  const merged = [...priorTrend];
-  for (const pt of agg.trend) {
-    if (!merged.some((m) => m.date === pt.date && m.promptSetVersion === pt.promptSetVersion)) merged.push(pt);
-  }
   mkdirSync(dirname(trendPath), { recursive: true });
-  writeFileSync(trendPath, JSON.stringify(merged, null, 2));
+  writeFileSync(trendPath, JSON.stringify(result.trend, null, 2));
 
   console.log(`Report written: ${outPath}`);
   console.log(`Deploy: ./scripts/deploy.sh ${outPath}`);
